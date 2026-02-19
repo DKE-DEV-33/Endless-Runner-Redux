@@ -11,7 +11,7 @@ const MAX_SEGMENT: float = 520.0
 const START_PLATFORM_X: float = -260.0
 const START_PLATFORM_LENGTH: float = 1100.0
 const START_LANE: int = 0
-const BOOTSTRAP_RELEASE_OFFSET: float = 420.0
+const BOOTSTRAP_RELEASE_OFFSET: float = 1400.0
 const RIFT_MIN_SECONDS: float = 16.0
 const RIFT_MAX_SECONDS: float = 28.0
 const RIFT_DURATION: float = 6.0
@@ -36,6 +36,7 @@ const HEALTH_PICKUP_PITY_DANGER_ROUTES: int = 5
 const BIG_COIN_VALUE: int = 10
 const PLATFORM_LAYER_SOLID: int = 1
 const PLATFORM_LAYER_ONE_WAY: int = 2
+const INFO_NOTICE_DURATION: float = 3.0
 
 const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
@@ -87,6 +88,8 @@ var routes_since_speed_pickup: int = 0
 var run_mode: String = "standard"
 var run_seed: int = 0
 var sfx_volume_db: float = -6.0
+var info_notice: String = ""
+var info_notice_until: float = 0.0
 
 var rift_active: bool = false
 var rift_until: float = 0.0
@@ -114,13 +117,14 @@ func _ready() -> void:
 	mission_no_hit_start_x = player.global_position.x
 	_build_static_opening()
 	_init_mission()
+	_prewarm_post_bootstrap_route()
 	next_rift_at = rng.randf_range(RIFT_MIN_SECONDS, RIFT_MAX_SECONDS)
 	_apply_section_theme(0)
 	score_label.text = "Score: 0"
 	health_label.text = "Health: %d" % health
 	status_label.text = "Status: BOOTSTRAP"
 	mission_label.text = _mission_text()
-	info_label.text = "Mode: %s | cyan=up-through | amber=drop-through | purple=ghost | Big coin: x10" % run_mode.capitalize()
+	_refresh_info_label()
 	version_label.text = "Version: %s" % BUILD_VERSION
 	_setup_pause_ui()
 
@@ -139,8 +143,11 @@ func _process(delta: float) -> void:
 
 	run_seconds += delta
 	hazard_hit_cooldown = maxf(0.0, hazard_hit_cooldown - delta)
+	if info_notice != "" and run_seconds >= info_notice_until:
+		info_notice = ""
 	_update_rift_state()
 	_update_section_progression()
+	_refresh_info_label()
 
 	distance_score = int(player.global_position.x / 12.0)
 	score_label.text = "Score: %d (x%.1f)" % [_current_score(), _speed_multiplier()]
@@ -175,6 +182,12 @@ func _build_static_opening() -> void:
 	next_spawn_x = x
 	bootstrap_release_x = x - BOOTSTRAP_RELEASE_OFFSET
 	last_lane = 1
+
+func _prewarm_post_bootstrap_route() -> void:
+	# Seed future segments before bootstrap ends so first sector shift does not visibly pop.
+	var preview_x: float = bootstrap_release_x
+	while next_spawn_x < preview_x + PLAYER_AHEAD_SPAWN + 320.0:
+		_spawn_segment()
 
 func _spawn_fixed_platform(start_x: float, lane: int, width: float, gap_after: float, add_coins: bool) -> float:
 	var y: float = LANE_Y[lane]
@@ -606,7 +619,7 @@ func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 	while total_coins_collected >= next_bonus_heart_at:
 		_apply_health_delta(1)
 		next_bonus_heart_at += COINS_PER_BONUS_HEART
-		info_label.text = "Coin milestone reached! +1 HP | Next at %d coins" % next_bonus_heart_at
+		_set_info_notice("Coin milestone reached! +1 HP | Next at %d coins" % next_bonus_heart_at)
 	if mission_type == MissionType.COINS:
 		mission_progress += 1
 	coins.erase(coin)
@@ -621,7 +634,7 @@ func _on_big_coin_body_entered(body: Node, big_coin: Area2D) -> void:
 	while total_coins_collected >= next_bonus_heart_at:
 		_apply_health_delta(1)
 		next_bonus_heart_at += COINS_PER_BONUS_HEART
-		info_label.text = "Coin milestone reached! +1 HP | Next at %d coins" % next_bonus_heart_at
+		_set_info_notice("Coin milestone reached! +1 HP | Next at %d coins" % next_bonus_heart_at)
 	if mission_type == MissionType.COINS:
 		mission_progress += BIG_COIN_VALUE
 	big_coins.erase(big_coin)
@@ -654,7 +667,7 @@ func _on_speed_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 	_play_sfx_tone(340.0, 0.18, -10.0)
 	var slow_amount: int = 2 if rng.randf() < 0.35 else 1
 	var pace_level: int = player.add_pace_levels(-slow_amount)
-	info_label.text = "Flux stabilizer collected: -%d pace (now %d)" % [slow_amount, pace_level]
+	_set_info_notice("Flux stabilizer collected: -%d pace (now %d)" % [slow_amount, pace_level])
 	routes_since_speed_pickup = 0
 	speed_pickups.erase(pickup)
 	pickup.queue_free()
@@ -758,7 +771,7 @@ func _init_mission() -> void:
 			mission_target = mini(130, 35 + (mission_tier * 10))
 		MissionType.NO_HIT_DISTANCE:
 			mission_target = mini(5200, 900 + (mission_tier * 420))
-	info_label.text = "Mission %d live | Space: jump skills | Left/Right: pace" % mission_tier
+	_set_info_notice("Mission %d live" % mission_tier, 2.4)
 
 func _update_mission_progress() -> void:
 	if mission_completed:
@@ -778,7 +791,7 @@ func _update_mission_progress() -> void:
 		bonus_score += reward
 		_increment_pace_level(1, "Mission complete")
 		_play_sfx_tone(760.0, 0.16, -8.0)
-		info_label.text = "Mission %d complete! +%d | Pace %d" % [mission_tier, reward, player.get_pace_level()]
+		_set_info_notice("Mission %d complete! +%d | Pace %d" % [mission_tier, reward, player.get_pace_level()])
 
 func _tick_mission_chain() -> void:
 	if not mission_completed:
@@ -805,7 +818,7 @@ func _apply_health_delta(delta: int) -> void:
 
 func _increment_pace_level(amount: int, reason: String) -> void:
 	var pace_level: int = player.add_pace_levels(amount)
-	info_label.text = "%s | Pace level: %d" % [reason, pace_level]
+	_set_info_notice("%s | Pace level: %d" % [reason, pace_level], 2.1)
 
 func _compute_health_spawn_chance() -> float:
 	var health_missing: int = MAX_HEALTH - health
@@ -824,6 +837,20 @@ func _compute_health_spawn_chance() -> float:
 		return 0.95
 
 	return clampf(chance, 0.04, 0.90)
+
+func _base_info_text() -> String:
+	return "Mode: %s | cyan=up-through | amber=drop-through | purple=ghost | Big coin: x10" % run_mode.capitalize()
+
+func _refresh_info_label() -> void:
+	var text: String = _base_info_text()
+	if info_notice != "":
+		text += " | " + info_notice
+	info_label.text = text
+
+func _set_info_notice(message: String, duration: float = INFO_NOTICE_DURATION) -> void:
+	info_notice = message
+	info_notice_until = run_seconds + duration
+	_refresh_info_label()
 
 func _current_score() -> int:
 	return int(float(distance_score) * _speed_multiplier()) + bonus_score
