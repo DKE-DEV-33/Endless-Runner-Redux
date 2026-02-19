@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-0.8.1"
+const BUILD_VERSION: String = "build-0.8.2"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -19,7 +19,10 @@ const MISSION_BONUS_BASE: int = 500
 const MAX_HEALTH: int = 5
 const COINS_PER_BONUS_HEART: int = 100
 const SECTION_LENGTH: float = 2300.0
-const ALT_ROUTE_VERTICAL_GAP_MIN: float = 72.0
+const ALT_ROUTE_VERTICAL_GAP_MIN: float = 96.0
+const ALT_ROUTE_EXTRA_LIFT: float = 44.0
+const ALT_ROUTE_MIN_WIDTH: float = 240.0
+const ALT_ROUTE_MAX_WIDTH: float = 380.0
 const SPEED_PICKUP_CHANCE: float = 0.04
 const SPEED_PICKUP_MAX_CHANCE: float = 0.12
 const HAZARD_HIT_COOLDOWN: float = 0.45
@@ -60,6 +63,7 @@ var last_lane: int = START_LANE
 var run_seconds: float = 0.0
 var current_section: int = 0
 var hazard_hit_cooldown: float = 0.0
+var danger_routes_since_health: int = 0
 
 var rift_active: bool = false
 var rift_until: float = 0.0
@@ -290,22 +294,23 @@ func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
 	if candidates.is_empty():
 		return
 	var alt_lane: int = candidates[rng.randi_range(0, candidates.size() - 1)]
-	var alt_width: float = clampf(width * rng.randf_range(0.48, 0.72), 170.0, 290.0)
+	var alt_width: float = clampf(width * rng.randf_range(0.62, 0.88), ALT_ROUTE_MIN_WIDTH, ALT_ROUTE_MAX_WIDTH)
 	var min_start: float = x + 70.0
 	var max_start: float = x + width - alt_width - 45.0
 	if max_start <= min_start:
 		return
 	var alt_x: float = rng.randf_range(min_start, max_start)
-	var alt_y: float = LANE_Y[alt_lane]
+	var alt_y: float = LANE_Y[alt_lane] - ALT_ROUTE_EXTRA_LIFT
 	var alt_platform: StaticBody2D = _create_platform(alt_x, alt_y, alt_width)
 	platforms.append(alt_platform)
 	add_child(alt_platform)
 	_place_coins(alt_x, alt_y, alt_width, alt_lane)
 	# Alt route is the risk/reward lane: always add some danger, then occasional heal.
+	danger_routes_since_health += 1
 	if rng.randf() < 0.65:
 		_spawn_hazard_single(alt_x, alt_y, alt_width)
-	if rng.randf() < 0.35:
-		_maybe_place_health_pickup(alt_x, alt_y, alt_width, alt_lane, 0.75)
+	var health_spawn_chance: float = _compute_health_spawn_chance()
+	_maybe_place_health_pickup(alt_x, alt_y, alt_width, alt_lane, health_spawn_chance)
 
 func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int) -> void:
 	if lane > 2:
@@ -434,6 +439,7 @@ func _on_health_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 	if body != player:
 		return
 	_apply_health_delta(1)
+	danger_routes_since_health = 0
 	health_pickups.erase(pickup)
 	pickup.queue_free()
 
@@ -586,3 +592,21 @@ func _apply_health_delta(delta: int) -> void:
 func _increment_pace_level(amount: int, reason: String) -> void:
 	var pace_level: int = player.add_pace_levels(amount)
 	info_label.text = "%s | Pace level: %d" % [reason, pace_level]
+
+func _compute_health_spawn_chance() -> float:
+	var health_missing: int = MAX_HEALTH - health
+	var pace_level: int = player.get_pace_level()
+	var difficulty_penalty: float = minf(0.30, float(mission_tier - 1) * 0.015 + float(current_section) * 0.012)
+	var pressure_bonus: float = float(health_missing) * 0.12
+	var critical_bonus: float = 0.24 if health <= 1 else (0.10 if health == 2 else 0.0)
+	var pace_bonus: float = float(pace_level) * 0.010
+	var rift_penalty: float = 0.05 if rift_active else 0.0
+	var chance: float = 0.10 + pressure_bonus + critical_bonus + pace_bonus - difficulty_penalty - rift_penalty
+
+	# "Pity" protection: at critical health on repeated dangerous routes, force a spawn.
+	if health <= 1 and danger_routes_since_health >= 3:
+		return 1.0
+	if health == 2 and danger_routes_since_health >= 6:
+		return 0.95
+
+	return clampf(chance, 0.05, 0.88)
