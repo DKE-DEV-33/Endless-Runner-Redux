@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-0.4.1"
+const BUILD_VERSION: String = "build-0.5.0"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -15,6 +15,7 @@ const BOOTSTRAP_RELEASE_OFFSET: float = 420.0
 const RIFT_MIN_SECONDS: float = 16.0
 const RIFT_MAX_SECONDS: float = 28.0
 const RIFT_DURATION: float = 6.0
+const MISSION_BONUS_BASE: int = 500
 
 const LANE_Y: Array[float] = [448.0, 398.0, 352.0, 308.0]
 
@@ -35,6 +36,9 @@ var bonus_score: int = 0
 var health: int = 3
 var mission_target: int = 40
 var mission_progress: int = 0
+var mission_tier: int = 1
+var mission_completed: bool = false
+var mission_complete_until: float = 0.0
 var last_lane: int = START_LANE
 var run_seconds: float = 0.0
 
@@ -86,6 +90,7 @@ func _process(delta: float) -> void:
 			_spawn_segment()
 
 	_update_mission_progress()
+	_tick_mission_chain()
 	mission_label.text = _mission_text()
 
 	_cleanup_old()
@@ -176,22 +181,53 @@ func _place_coins(x: float, y: float, width: float, lane: int) -> void:
 		add_child(coin)
 
 func _place_hazards(x: float, y: float, width: float, lane: int) -> void:
-	if lane > 1:
+	if lane > 2:
 		return
-	var hazard_count: int = 1 if width < 340.0 else 2
+	if width < 260.0 and rng.randf() < 0.5:
+		return
+
+	var pattern_roll: float = rng.randf()
 	if rift_active:
-		hazard_count += 1
-	for i: int in hazard_count:
-		var skip_chance: float = 0.45
-		if rift_active:
-			skip_chance = 0.22
-		if rng.randf() < skip_chance:
-			continue
-		var hx: float = x + rng.randf_range(80.0, maxf(100.0, width - 80.0))
-		var hy: float = y - (PLATFORM_THICKNESS * 0.5) - 12.0
-		var hazard: Area2D = _create_hazard(Vector2(hx, hy))
-		hazards.append(hazard)
-		add_child(hazard)
+		pattern_roll += 0.18
+
+	if pattern_roll < 0.34:
+		_spawn_hazard_single(x, y, width)
+	elif pattern_roll < 0.72:
+		_spawn_hazard_pair(x, y, width)
+	else:
+		_spawn_hazard_gate(x, y, width)
+
+	if rift_active and width > 320.0 and rng.randf() < 0.45:
+		var spike_x: float = x + rng.randf_range(120.0, width - 90.0)
+		_spawn_hazard_at(Vector2(spike_x, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+
+func _spawn_hazard_single(x: float, y: float, width: float) -> void:
+	if rng.randf() < 0.35:
+		return
+	var hx: float = x + clampf(width * rng.randf_range(0.40, 0.70), 82.0, width - 82.0)
+	_spawn_hazard_at(Vector2(hx, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+
+func _spawn_hazard_pair(x: float, y: float, width: float) -> void:
+	if width < 290.0:
+		_spawn_hazard_single(x, y, width)
+		return
+	var first_x: float = x + clampf(width * rng.randf_range(0.28, 0.38), 80.0, width - 160.0)
+	var second_x: float = x + clampf(width * rng.randf_range(0.62, 0.74), 160.0, width - 80.0)
+	_spawn_hazard_at(Vector2(first_x, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+	_spawn_hazard_at(Vector2(second_x, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+
+func _spawn_hazard_gate(x: float, y: float, width: float) -> void:
+	if width < 330.0:
+		_spawn_hazard_pair(x, y, width)
+		return
+	var center: float = x + clampf(width * rng.randf_range(0.55, 0.72), 160.0, width - 160.0)
+	_spawn_hazard_at(Vector2(center - 38.0, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+	_spawn_hazard_at(Vector2(center + 38.0, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+
+func _spawn_hazard_at(pos: Vector2) -> void:
+	var hazard: Area2D = _create_hazard(pos)
+	hazards.append(hazard)
+	add_child(hazard)
 
 func _create_coin(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
@@ -298,18 +334,25 @@ func _update_rift_state() -> void:
 		rift_until = run_seconds + RIFT_DURATION
 
 func _init_mission() -> void:
-	mission_type = rng.randi_range(0, 2)
+	mission_completed = false
+	mission_complete_until = 0.0
+	var next_type: int = rng.randi_range(0, 2)
+	if mission_tier > 1 and next_type == mission_type:
+		next_type = (next_type + 1 + rng.randi_range(0, 1)) % 3
+	mission_type = next_type
 	mission_progress = 0
+	mission_no_hit_start_x = player.global_position.x
 	match mission_type:
 		MissionType.COINS:
-			mission_target = 40
+			mission_target = mini(92, 28 + (mission_tier * 8))
 		MissionType.SURVIVE_TIME:
-			mission_target = 75
+			mission_target = mini(130, 35 + (mission_tier * 10))
 		MissionType.NO_HIT_DISTANCE:
-			mission_target = 2200
+			mission_target = mini(5200, 900 + (mission_tier * 420))
+	info_label.text = "Mission %d live | Space: Jump | Auto-run" % mission_tier
 
 func _update_mission_progress() -> void:
-	if mission_progress >= mission_target:
+	if mission_completed:
 		return
 	match mission_type:
 		MissionType.COINS:
@@ -320,17 +363,27 @@ func _update_mission_progress() -> void:
 			mission_progress = mini(mission_target, int(player.global_position.x - mission_no_hit_start_x))
 
 	if mission_progress >= mission_target:
-		# Mission completion bonus.
-		bonus_score += 500
-		info_label.text = "Mission complete! +500 | Space: Jump | Auto-run"
+		mission_completed = true
+		mission_complete_until = run_seconds + 2.0
+		var reward: int = MISSION_BONUS_BASE + ((mission_tier - 1) * 75)
+		bonus_score += reward
+		info_label.text = "Mission %d complete! +%d" % [mission_tier, reward]
+
+func _tick_mission_chain() -> void:
+	if not mission_completed:
+		return
+	if run_seconds < mission_complete_until:
+		return
+	mission_tier += 1
+	_init_mission()
 
 func _mission_text() -> String:
 	var suffix: String = " (Complete)" if mission_progress >= mission_target else ""
 	match mission_type:
 		MissionType.COINS:
-			return "Mission: Collect %d coins (%d/%d)%s" % [mission_target, mission_progress, mission_target, suffix]
+			return "Mission %d: Collect %d coins (%d/%d)%s" % [mission_tier, mission_target, mission_progress, mission_target, suffix]
 		MissionType.SURVIVE_TIME:
-			return "Mission: Survive %ds (%d/%d)%s" % [mission_target, mission_progress, mission_target, suffix]
+			return "Mission %d: Survive %ds (%d/%d)%s" % [mission_tier, mission_target, mission_progress, mission_target, suffix]
 		MissionType.NO_HIT_DISTANCE:
-			return "Mission: No-hit %dpx (%d/%d)%s" % [mission_target, mission_progress, mission_target, suffix]
+			return "Mission %d: No-hit %dpx (%d/%d)%s" % [mission_tier, mission_target, mission_progress, mission_target, suffix]
 	return "Mission: --"
