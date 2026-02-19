@@ -1,5 +1,6 @@
 extends CharacterBody2D
 class_name RunnerPlayer
+signal jump_triggered(is_air_jump: bool)
 
 const BASE_RUN_SPEED := 260.0
 const MIN_RUN_SPEED := 170.0
@@ -64,6 +65,7 @@ func _physics_process(delta: float) -> void:
 		jump_hold_timer = MAX_JUMP_HOLD
 		if not used_ground_jump:
 			air_jumps_used += 1
+		emit_signal("jump_triggered", not used_ground_jump)
 
 	if Input.is_action_pressed("jump") and jump_hold_timer > 0.0 and velocity.y < 0.0:
 		velocity.y += EXTRA_JUMP_HOLD_FORCE * delta

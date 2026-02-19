@@ -51,6 +51,15 @@ layout_mode = 2
 text = "Best Run: --"
 horizontal_alignment = 1
 
+[node name="ModeButton" type="Button" parent="Center"]
+layout_mode = 2
+text = "Mode: Standard"
+
+[node name="DailySeedLabel" type="Label" parent="Center"]
+layout_mode = 2
+text = "Daily Seed: --"
+horizontal_alignment = 1
+
 [node name="StartButton" type="Button" parent="Center"]
 layout_mode = 2
 text = "Start"

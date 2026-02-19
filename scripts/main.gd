@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-0.9.0"
+const BUILD_VERSION: String = "build-1.0.0"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -26,6 +26,7 @@ const ALT_ROUTE_MAX_WIDTH: float = 460.0
 const SPEED_PICKUP_CHANCE: float = 0.04
 const SPEED_PICKUP_MAX_CHANCE: float = 0.12
 const HAZARD_HIT_COOLDOWN: float = 0.45
+const SETTINGS_FILE: String = "user://settings.cfg"
 
 const LANE_Y: Array[float] = [448.0, 398.0, 352.0, 308.0]
 const SECTION_COLORS: Array[Color] = [
@@ -44,6 +45,14 @@ const SECTION_COLORS: Array[Color] = [
 @onready var mission_label: Label = $CanvasLayer/MissionLabel
 @onready var info_label: Label = $CanvasLayer/InfoLabel
 @onready var version_label: Label = $CanvasLayer/VersionLabel
+@onready var pause_layer: CanvasLayer = $PauseLayer
+@onready var pause_panel: Panel = $PauseLayer/PausePanel
+@onready var pause_status_label: Label = $PauseLayer/PausePanel/VBox/PauseStatusLabel
+@onready var resume_button: Button = $PauseLayer/PausePanel/VBox/ResumeButton
+@onready var restart_button: Button = $PauseLayer/PausePanel/VBox/RestartButton
+@onready var menu_button: Button = $PauseLayer/PausePanel/VBox/MenuButton
+@onready var master_slider: HSlider = $PauseLayer/PausePanel/VBox/MasterSlider
+@onready var sfx_slider: HSlider = $PauseLayer/PausePanel/VBox/SfxSlider
 
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var next_spawn_x: float = -120.0
@@ -64,6 +73,9 @@ var run_seconds: float = 0.0
 var current_section: int = 0
 var hazard_hit_cooldown: float = 0.0
 var danger_routes_since_health: int = 0
+var run_mode: String = "standard"
+var run_seed: int = 0
+var sfx_volume_db: float = -6.0
 
 var rift_active: bool = false
 var rift_until: float = 0.0
@@ -80,9 +92,11 @@ var health_pickups: Array[Area2D] = []
 var speed_pickups: Array[Area2D] = []
 
 func _ready() -> void:
-	rng.randomize()
+	_setup_run_mode_and_seed()
+	_load_audio_settings()
 	player.global_position = Vector2(120.0, 408.0)
 	player.velocity = Vector2.ZERO
+	player.jump_triggered.connect(_on_player_jump_triggered)
 	mission_no_hit_start_x = player.global_position.x
 	_build_static_opening()
 	_init_mission()
@@ -92,8 +106,18 @@ func _ready() -> void:
 	health_label.text = "Health: %d" % health
 	status_label.text = "Status: BOOTSTRAP"
 	mission_label.text = _mission_text()
-	info_label.text = "Space: Jump (tap/hold + double jump) | Left/Right: pace | 100 coins: +1 HP"
+	info_label.text = "Mode: %s | Space: jump | Left/Right: pace | 100 coins: +1 HP" % run_mode.capitalize()
 	version_label.text = "Version: %s" % BUILD_VERSION
+	_setup_pause_ui()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		_toggle_pause_menu()
+		return
+	if event is InputEventKey:
+		var key_event: InputEventKey = event
+		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_ESCAPE:
+			_toggle_pause_menu()
 
 func _process(delta: float) -> void:
 	if not is_instance_valid(player):
@@ -402,6 +426,7 @@ func _create_health_pickup(pos: Vector2) -> Area2D:
 func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 	if body != player:
 		return
+	_play_sfx_tone(980.0, 0.045, -14.0)
 	bonus_score += 25
 	total_coins_collected += 1
 	while total_coins_collected >= next_bonus_heart_at:
@@ -419,6 +444,7 @@ func _on_hazard_body_entered(body: Node) -> void:
 	if hazard_hit_cooldown > 0.0:
 		return
 	hazard_hit_cooldown = HAZARD_HIT_COOLDOWN
+	_play_sfx_tone(210.0, 0.14, -6.0)
 	_apply_health_delta(-1)
 	mission_no_hit_start_x = player.global_position.x
 	if health <= 0:
@@ -427,6 +453,7 @@ func _on_hazard_body_entered(body: Node) -> void:
 func _on_health_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 	if body != player:
 		return
+	_play_sfx_tone(520.0, 0.15, -8.0)
 	_apply_health_delta(1)
 	danger_routes_since_health = 0
 	health_pickups.erase(pickup)
@@ -435,6 +462,7 @@ func _on_health_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 func _on_speed_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 	if body != player:
 		return
+	_play_sfx_tone(340.0, 0.18, -10.0)
 	var slow_amount: int = 2 if rng.randf() < 0.35 else 1
 	var pace_level: int = player.add_pace_levels(-slow_amount)
 	info_label.text = "Flux stabilizer collected: -%d pace (now %d)" % [slow_amount, pace_level]
@@ -511,6 +539,7 @@ func _update_section_progression() -> void:
 		current_section += 1
 		_apply_section_theme(current_section)
 		_increment_pace_level(1, "Sector shift")
+		_play_sfx_tone(640.0, 0.12, -9.0)
 
 func _apply_section_theme(section_index: int) -> void:
 	if SECTION_COLORS.is_empty():
@@ -553,6 +582,7 @@ func _update_mission_progress() -> void:
 		var reward: int = MISSION_BONUS_BASE + ((mission_tier - 1) * 75)
 		bonus_score += reward
 		_increment_pace_level(1, "Mission complete")
+		_play_sfx_tone(760.0, 0.16, -8.0)
 		info_label.text = "Mission %d complete! +%d | Pace %d" % [mission_tier, reward, player.get_pace_level()]
 
 func _tick_mission_chain() -> void:
@@ -614,6 +644,7 @@ func _end_run_and_return_to_menu() -> void:
 	get_tree().set_meta("last_score", run_score)
 	get_tree().set_meta("best_score", best_score)
 	get_tree().set_meta("is_new_best", is_new_best)
+	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/Menu.tscn")
 
 func _load_best_score() -> int:
@@ -627,3 +658,107 @@ func _save_best_score(score: int) -> void:
 	var config: ConfigFile = ConfigFile.new()
 	config.set_value("scores", "best_score", score)
 	config.save("user://run_stats.cfg")
+
+func _setup_run_mode_and_seed() -> void:
+	run_mode = String(get_tree().get_meta("run_mode", "standard"))
+	if run_mode == "daily":
+		var daily_key: String = Time.get_date_string_from_system()
+		run_seed = abs(daily_key.hash())
+		rng.seed = run_seed
+	else:
+		rng.randomize()
+		run_seed = rng.randi()
+
+func _setup_pause_ui() -> void:
+	pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	pause_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	pause_panel.visible = false
+
+	resume_button.pressed.connect(_on_resume_pressed)
+	restart_button.pressed.connect(_on_restart_pressed)
+	menu_button.pressed.connect(_on_menu_pressed)
+	master_slider.value_changed.connect(_on_master_slider_changed)
+	sfx_slider.value_changed.connect(_on_sfx_slider_changed)
+
+	master_slider.value = AudioServer.get_bus_volume_db(0)
+	sfx_slider.value = sfx_volume_db
+
+func _toggle_pause_menu() -> void:
+	var opening: bool = not pause_panel.visible
+	pause_panel.visible = opening
+	get_tree().paused = opening
+	if opening:
+		pause_status_label.text = "Paused | Score: %d | Pace %d" % [_current_score(), player.get_pace_level()]
+
+func _on_resume_pressed() -> void:
+	pause_panel.visible = false
+	get_tree().paused = false
+
+func _on_restart_pressed() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/Main.tscn")
+
+func _on_menu_pressed() -> void:
+	get_tree().paused = false
+	_end_run_and_return_to_menu()
+
+func _on_master_slider_changed(value: float) -> void:
+	AudioServer.set_bus_volume_db(0, value)
+	_save_audio_settings()
+
+func _on_sfx_slider_changed(value: float) -> void:
+	sfx_volume_db = value
+	_save_audio_settings()
+
+func _load_audio_settings() -> void:
+	var config: ConfigFile = ConfigFile.new()
+	var err: int = config.load(SETTINGS_FILE)
+	if err != OK:
+		AudioServer.set_bus_volume_db(0, -4.0)
+		sfx_volume_db = -6.0
+		return
+	AudioServer.set_bus_volume_db(0, float(config.get_value("audio", "master_db", -4.0)))
+	sfx_volume_db = float(config.get_value("audio", "sfx_db", -6.0))
+
+func _save_audio_settings() -> void:
+	var config: ConfigFile = ConfigFile.new()
+	config.set_value("audio", "master_db", AudioServer.get_bus_volume_db(0))
+	config.set_value("audio", "sfx_db", sfx_volume_db)
+	config.save(SETTINGS_FILE)
+
+func _on_player_jump_triggered(is_air_jump: bool) -> void:
+	if is_air_jump:
+		_play_sfx_tone(520.0, 0.08, -12.0)
+	else:
+		_play_sfx_tone(440.0, 0.07, -12.0)
+
+func _play_sfx_tone(frequency: float, duration: float, level_db: float) -> void:
+	var stream: AudioStreamWAV = _create_tone_stream(frequency, duration)
+	var player_node: AudioStreamPlayer = AudioStreamPlayer.new()
+	player_node.stream = stream
+	player_node.bus = "Master"
+	player_node.volume_db = level_db + sfx_volume_db
+	add_child(player_node)
+	player_node.finished.connect(player_node.queue_free)
+	player_node.play()
+
+func _create_tone_stream(frequency: float, duration: float) -> AudioStreamWAV:
+	var sample_rate: int = 22050
+	var total_samples: int = maxi(1, int(sample_rate * duration))
+	var data: PackedByteArray = PackedByteArray()
+	data.resize(total_samples * 2)
+
+	for i: int in total_samples:
+		var t: float = float(i) / float(sample_rate)
+		var env: float = 1.0 - (float(i) / float(total_samples))
+		var sample: float = sinf(TAU * frequency * t) * env * 0.42
+		var s: int = int(clampi(int(sample * 32767.0), -32768, 32767))
+		data[i * 2] = s & 0xFF
+		data[i * 2 + 1] = (s >> 8) & 0xFF
+
+	var wav: AudioStreamWAV = AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = sample_rate
+	wav.stereo = false
+	wav.data = data
+	return wav
