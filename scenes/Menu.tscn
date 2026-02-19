@@ -1,6 +1,51 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/menu.gd" id="1"]
+
+[sub_resource type="LabelSettings" id="1"]
+font_size = 34
+font_color = Color(0.95, 0.98, 1, 1)
+outline_size = 5
+outline_color = Color(0, 0, 0, 0.55)
+
+[sub_resource type="LabelSettings" id="2"]
+font_size = 19
+font_color = Color(0.86, 0.93, 1, 1)
+outline_size = 4
+outline_color = Color(0, 0, 0, 0.5)
+
+[sub_resource type="StyleBoxFlat" id="3"]
+bg_color = Color(0.05, 0.08, 0.14, 0.94)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.29, 0.76, 1, 0.5)
+
+[sub_resource type="StyleBoxFlat" id="4"]
+bg_color = Color(0.17, 0.57, 0.9, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="5"]
+bg_color = Color(0.22, 0.68, 1, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="6"]
+bg_color = Color(0.12, 0.43, 0.72, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
 
 [node name="Menu" type="Control"]
 layout_mode = 3
@@ -20,50 +65,75 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.04, 0.06, 0.1, 1)
 
-[node name="Center" type="VBoxContainer" parent="."]
+[node name="Card" type="Panel" parent="."]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -180.0
-offset_top = -120.0
-offset_right = 180.0
-offset_bottom = 120.0
+offset_left = -240.0
+offset_top = -196.0
+offset_right = 240.0
+offset_bottom = 196.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("3")
+
+[node name="Center" type="VBoxContainer" parent="Card"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = -24.0
 grow_horizontal = 2
 grow_vertical = 2
 alignment = 1
-theme_override_constants/separation = 16
+theme_override_constants/separation = 14
 
-[node name="Title" type="Label" parent="Center"]
+[node name="Title" type="Label" parent="Card/Center"]
 layout_mode = 2
 text = "ENDLESS RUNNER REDUX"
 horizontal_alignment = 1
+label_settings = SubResource("1")
 
-[node name="LastScoreLabel" type="Label" parent="Center"]
+[node name="LastScoreLabel" type="Label" parent="Card/Center"]
 layout_mode = 2
 text = "Last Run: --"
 horizontal_alignment = 1
+label_settings = SubResource("2")
 
-[node name="BestScoreLabel" type="Label" parent="Center"]
+[node name="BestScoreLabel" type="Label" parent="Card/Center"]
 layout_mode = 2
 text = "Best Run: --"
 horizontal_alignment = 1
+label_settings = SubResource("2")
 
-[node name="ModeButton" type="Button" parent="Center"]
+[node name="ModeButton" type="Button" parent="Card/Center"]
 layout_mode = 2
 text = "Mode: Standard"
+theme_override_styles/normal = SubResource("4")
+theme_override_styles/hover = SubResource("5")
+theme_override_styles/pressed = SubResource("6")
 
-[node name="DailySeedLabel" type="Label" parent="Center"]
+[node name="DailySeedLabel" type="Label" parent="Card/Center"]
 layout_mode = 2
 text = "Daily Seed: --"
 horizontal_alignment = 1
+label_settings = SubResource("2")
 
-[node name="StartButton" type="Button" parent="Center"]
+[node name="StartButton" type="Button" parent="Card/Center"]
 layout_mode = 2
 text = "Start"
+theme_override_styles/normal = SubResource("4")
+theme_override_styles/hover = SubResource("5")
+theme_override_styles/pressed = SubResource("6")
 
-[node name="QuitButton" type="Button" parent="Center"]
+[node name="QuitButton" type="Button" parent="Card/Center"]
 layout_mode = 2
 text = "Quit"
+theme_override_styles/normal = SubResource("4")
+theme_override_styles/hover = SubResource("5")
+theme_override_styles/pressed = SubResource("6")

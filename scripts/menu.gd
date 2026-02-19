@@ -1,11 +1,11 @@
 extends Control
 
-@onready var start_button: Button = $Center/StartButton
-@onready var quit_button: Button = $Center/QuitButton
-@onready var last_score_label: Label = $Center/LastScoreLabel
-@onready var best_score_label: Label = $Center/BestScoreLabel
-@onready var mode_button: Button = $Center/ModeButton
-@onready var daily_seed_label: Label = $Center/DailySeedLabel
+@onready var start_button: Button = $Card/Center/StartButton
+@onready var quit_button: Button = $Card/Center/QuitButton
+@onready var last_score_label: Label = $Card/Center/LastScoreLabel
+@onready var best_score_label: Label = $Card/Center/BestScoreLabel
+@onready var mode_button: Button = $Card/Center/ModeButton
+@onready var daily_seed_label: Label = $Card/Center/DailySeedLabel
 
 var run_mode: String = "standard"
 

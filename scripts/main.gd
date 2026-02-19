@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.0.2"
+const BUILD_VERSION: String = "build-1.0.3"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -48,6 +48,7 @@ const SECTION_COLORS: Array[Color] = [
 @onready var info_label: Label = $CanvasLayer/InfoLabel
 @onready var version_label: Label = $CanvasLayer/VersionLabel
 @onready var pause_layer: CanvasLayer = $PauseLayer
+@onready var pause_backdrop: ColorRect = $PauseLayer/PauseBackdrop
 @onready var pause_panel: Panel = $PauseLayer/PausePanel
 @onready var pause_status_label: Label = $PauseLayer/PausePanel/VBox/PauseStatusLabel
 @onready var resume_button: Button = $PauseLayer/PausePanel/VBox/ResumeButton
@@ -692,6 +693,8 @@ func _setup_run_mode_and_seed() -> void:
 func _setup_pause_ui() -> void:
 	pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	pause_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	pause_backdrop.process_mode = Node.PROCESS_MODE_ALWAYS
+	pause_backdrop.visible = false
 	pause_panel.visible = false
 
 	resume_button.pressed.connect(_on_resume_pressed)
@@ -705,12 +708,14 @@ func _setup_pause_ui() -> void:
 
 func _toggle_pause_menu() -> void:
 	var opening: bool = not pause_panel.visible
+	pause_backdrop.visible = opening
 	pause_panel.visible = opening
 	get_tree().paused = opening
 	if opening:
 		pause_status_label.text = "Paused | Score: %d | Pace %d" % [_current_score(), player.get_pace_level()]
 
 func _on_resume_pressed() -> void:
+	pause_backdrop.visible = false
 	pause_panel.visible = false
 	get_tree().paused = false
 
