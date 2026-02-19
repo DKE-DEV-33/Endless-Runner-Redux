@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.0.1"
+const BUILD_VERSION: String = "build-1.0.2"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -21,11 +21,11 @@ const COINS_PER_BONUS_HEART: int = 100
 const SECTION_LENGTH: float = 2300.0
 const ALT_ROUTE_VERTICAL_GAP_MIN: float = 104.0
 const ALT_ROUTE_EXTRA_LIFT: float = 88.0
-const ALT_ROUTE_MIN_WIDTH: float = 300.0
-const ALT_ROUTE_MAX_WIDTH: float = 460.0
-const SPEED_PICKUP_CHANCE: float = 0.07
-const SPEED_PICKUP_MAX_CHANCE: float = 0.18
-const SPEED_PICKUP_PITY_SEGMENTS: int = 10
+const ALT_ROUTE_MIN_WIDTH: float = 220.0
+const ALT_ROUTE_MAX_WIDTH: float = 340.0
+const SPEED_PICKUP_CHANCE: float = 0.025
+const SPEED_PICKUP_MAX_CHANCE: float = 0.085
+const SPEED_PICKUP_PITY_SEGMENTS: int = 18
 const HAZARD_HIT_COOLDOWN: float = 0.45
 const SETTINGS_FILE: String = "user://settings.cfg"
 const HEALTH_PICKUP_PITY_DANGER_ROUTES: int = 5
@@ -132,7 +132,7 @@ func _process(delta: float) -> void:
 	_update_section_progression()
 
 	distance_score = int(player.global_position.x / 12.0)
-	score_label.text = "Score: %d" % _current_score()
+	score_label.text = "Score: %d (x%.1f)" % [_current_score(), _speed_multiplier()]
 
 	if _bootstrap_active():
 		status_label.text = "Status: BOOTSTRAP"
@@ -187,7 +187,7 @@ func _spawn_segment() -> void:
 	_place_hazards(next_spawn_x, y, segment_len, lane)
 	routes_since_speed_pickup += 1
 	var speed_spawned: bool = _maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane)
-	if not speed_spawned and routes_since_speed_pickup >= SPEED_PICKUP_PITY_SEGMENTS and player.get_pace_level() >= 2:
+	if not speed_spawned and routes_since_speed_pickup >= SPEED_PICKUP_PITY_SEGMENTS and player.get_pace_level() >= 4:
 		_maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane, 1.0)
 	_maybe_spawn_alt_route(next_spawn_x, segment_len, lane)
 
@@ -312,11 +312,11 @@ func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, cha
 	return true
 
 func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
-	if rng.randf() > 0.40:
+	if rng.randf() > 0.33:
 		return
-	var alt_width: float = clampf(width * rng.randf_range(0.70, 1.00), ALT_ROUTE_MIN_WIDTH, ALT_ROUTE_MAX_WIDTH)
+	var alt_width: float = clampf(width * rng.randf_range(0.52, 0.78), ALT_ROUTE_MIN_WIDTH, ALT_ROUTE_MAX_WIDTH)
 	var min_start: float = x + 70.0
-	var max_start: float = x + width - alt_width - 45.0
+	var max_start: float = x + width - alt_width - 28.0
 	if max_start <= min_start:
 		return
 	var alt_x: float = rng.randf_range(min_start, max_start)
@@ -648,7 +648,10 @@ func _compute_health_spawn_chance() -> float:
 	return clampf(chance, 0.04, 0.90)
 
 func _current_score() -> int:
-	return distance_score + bonus_score
+	return int(float(distance_score) * _speed_multiplier()) + bonus_score
+
+func _speed_multiplier() -> float:
+	return 1.0 + (float(player.get_pace_level()) * 0.1)
 
 func _end_run_and_return_to_menu() -> void:
 	var run_score: int = _current_score()
