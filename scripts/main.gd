@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-0.5.0"
+const BUILD_VERSION: String = "build-0.6.0"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -66,7 +66,7 @@ func _ready() -> void:
 	health_label.text = "Health: %d" % health
 	status_label.text = "Status: BOOTSTRAP"
 	mission_label.text = _mission_text()
-	info_label.text = "Space: Jump | Auto-run"
+	info_label.text = "Space: Jump (tap/hold + double jump) | Left/Right: pace"
 	version_label.text = "Version: %s" % BUILD_VERSION
 
 func _process(delta: float) -> void:
@@ -349,7 +349,7 @@ func _init_mission() -> void:
 			mission_target = mini(130, 35 + (mission_tier * 10))
 		MissionType.NO_HIT_DISTANCE:
 			mission_target = mini(5200, 900 + (mission_tier * 420))
-	info_label.text = "Mission %d live | Space: Jump | Auto-run" % mission_tier
+	info_label.text = "Mission %d live | Space: jump skills | Left/Right: pace" % mission_tier
 
 func _update_mission_progress() -> void:
 	if mission_completed:
