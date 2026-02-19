@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-0.8.0"
+const BUILD_VERSION: String = "build-0.8.1"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -20,7 +20,9 @@ const MAX_HEALTH: int = 5
 const COINS_PER_BONUS_HEART: int = 100
 const SECTION_LENGTH: float = 2300.0
 const ALT_ROUTE_VERTICAL_GAP_MIN: float = 72.0
-const SPEED_PICKUP_CHANCE: float = 0.05
+const SPEED_PICKUP_CHANCE: float = 0.04
+const SPEED_PICKUP_MAX_CHANCE: float = 0.12
+const HAZARD_HIT_COOLDOWN: float = 0.45
 
 const LANE_Y: Array[float] = [448.0, 398.0, 352.0, 308.0]
 const SECTION_COLORS: Array[Color] = [
@@ -57,6 +59,7 @@ var mission_complete_until: float = 0.0
 var last_lane: int = START_LANE
 var run_seconds: float = 0.0
 var current_section: int = 0
+var hazard_hit_cooldown: float = 0.0
 
 var rift_active: bool = false
 var rift_until: float = 0.0
@@ -93,6 +96,7 @@ func _process(delta: float) -> void:
 		return
 
 	run_seconds += delta
+	hazard_hit_cooldown = maxf(0.0, hazard_hit_cooldown - delta)
 	_update_rift_state()
 	_update_section_progression()
 
@@ -276,16 +280,16 @@ func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
 	if rng.randf() > 0.22:
 		return
 	var candidates: Array[int] = []
-	if lane > 0:
-		candidates.append(lane - 1)
-	if lane < LANE_Y.size() - 1:
-		candidates.append(lane + 1)
+	for offset: int in [-2, -1, 1, 2]:
+		var candidate_lane: int = lane + offset
+		if candidate_lane < 0 or candidate_lane >= LANE_Y.size():
+			continue
+		var y_gap: float = absf(LANE_Y[candidate_lane] - LANE_Y[lane])
+		if y_gap >= ALT_ROUTE_VERTICAL_GAP_MIN:
+			candidates.append(candidate_lane)
 	if candidates.is_empty():
 		return
 	var alt_lane: int = candidates[rng.randi_range(0, candidates.size() - 1)]
-	var y_gap: float = absf(LANE_Y[alt_lane] - LANE_Y[lane])
-	if y_gap < ALT_ROUTE_VERTICAL_GAP_MIN:
-		return
 	var alt_width: float = clampf(width * rng.randf_range(0.48, 0.72), 170.0, 290.0)
 	var min_start: float = x + 70.0
 	var max_start: float = x + width - alt_width - 45.0
@@ -306,7 +310,9 @@ func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
 func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int) -> void:
 	if lane > 2:
 		return
-	if rng.randf() > SPEED_PICKUP_CHANCE:
+	var pace_bonus_chance: float = float(player.get_pace_level()) * 0.006
+	var spawn_chance: float = minf(SPEED_PICKUP_MAX_CHANCE, SPEED_PICKUP_CHANCE + pace_bonus_chance)
+	if rng.randf() > spawn_chance:
 		return
 	var min_offset: float = minf(90.0, width * 0.32)
 	var max_offset: float = maxf(min_offset + 8.0, width - 60.0)
@@ -416,6 +422,9 @@ func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 func _on_hazard_body_entered(body: Node) -> void:
 	if body != player:
 		return
+	if hazard_hit_cooldown > 0.0:
+		return
+	hazard_hit_cooldown = HAZARD_HIT_COOLDOWN
 	_apply_health_delta(-1)
 	mission_no_hit_start_x = player.global_position.x
 	if health <= 0:
