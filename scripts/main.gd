@@ -751,7 +751,7 @@ func _create_tone_stream(frequency: float, duration: float) -> AudioStreamWAV:
 	for i: int in total_samples:
 		var t: float = float(i) / float(sample_rate)
 		var env: float = 1.0 - (float(i) / float(total_samples))
-		var sample: float = sinf(TAU * frequency * t) * env * 0.42
+		var sample: float = sin(TAU * frequency * t) * env * 0.42
 		var s: int = int(clampi(int(sample * 32767.0), -32768, 32767))
 		data[i * 2] = s & 0xFF
 		data[i * 2 + 1] = (s >> 8) & 0xFF
