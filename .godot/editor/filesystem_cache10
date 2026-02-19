@@ -1,0 +1,12 @@
+63f7b34db8d8cdea90c76aacccf841ec
+::res://::1771471274
+README.md::TextFile::-1::1771470813::0::1::::<><><>0<>0<><>::
+::res://scenes/::1771470740
+Main.tscn::PackedScene::-1::1771470750::0::1::::<><><>0<>0<><>::res://scripts/main.gd<>res://scripts/player.gd
+Menu.tscn::PackedScene::-1::1771470729::0::1::::<><><>0<>0<><>::res://scripts/menu.gd
+Splash.tscn::PackedScene::-1::1771470720::0::1::::<><><>0<>0<><>::res://scripts/splash.gd
+::res://scripts/::1771470804
+main.gd::GDScript::3521241586754430744::1771470804::0::1::::<>Node2D<><>0<>0<><>::
+menu.gd::GDScript::4877591933312673935::1771470763::0::1::::<>Control<><>0<>0<><>::
+player.gd::GDScript::7214239935795658154::1771470772::0::1::::<>CharacterBody2D<><>0<>0<><>::
+splash.gd::GDScript::7478849070920947433::1771470757::0::1::::<>Control<><>0<>0<><>::
