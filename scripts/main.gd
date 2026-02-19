@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-0.6.1"
+const BUILD_VERSION: String = "build-0.7.0"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -16,6 +16,8 @@ const RIFT_MIN_SECONDS: float = 16.0
 const RIFT_MAX_SECONDS: float = 28.0
 const RIFT_DURATION: float = 6.0
 const MISSION_BONUS_BASE: int = 500
+const MAX_HEALTH: int = 5
+const COINS_PER_BONUS_HEART: int = 100
 
 const LANE_Y: Array[float] = [448.0, 398.0, 352.0, 308.0]
 
@@ -34,6 +36,8 @@ var bootstrap_release_x: float = 0.0
 var distance_score: int = 0
 var bonus_score: int = 0
 var health: int = 3
+var total_coins_collected: int = 0
+var next_bonus_heart_at: int = COINS_PER_BONUS_HEART
 var mission_target: int = 40
 var mission_progress: int = 0
 var mission_tier: int = 1
@@ -53,6 +57,7 @@ var mission_no_hit_start_x: float = 0.0
 var platforms: Array[Node2D] = []
 var coins: Array[Area2D] = []
 var hazards: Array[Area2D] = []
+var health_pickups: Array[Area2D] = []
 
 func _ready() -> void:
 	rng.randomize()
@@ -66,7 +71,7 @@ func _ready() -> void:
 	health_label.text = "Health: %d" % health
 	status_label.text = "Status: BOOTSTRAP"
 	mission_label.text = _mission_text()
-	info_label.text = "Space: Jump (tap/hold + double jump) | Left/Right: pace"
+	info_label.text = "Space: Jump (tap/hold + double jump) | Left/Right: pace | 100 coins: +1 HP"
 	version_label.text = "Version: %s" % BUILD_VERSION
 
 func _process(delta: float) -> void:
@@ -130,6 +135,8 @@ func _spawn_segment() -> void:
 
 	_place_coins(next_spawn_x, y, segment_len, lane)
 	_place_hazards(next_spawn_x, y, segment_len, lane)
+	_maybe_place_health_pickup(next_spawn_x, y, segment_len, lane)
+	_maybe_spawn_alt_route(next_spawn_x, segment_len, lane)
 
 	var gap: float = _safe_gap_for_transition(last_lane, lane)
 	next_spawn_x += segment_len + gap
@@ -235,6 +242,47 @@ func _spawn_hazard_at(pos: Vector2) -> void:
 	hazards.append(hazard)
 	add_child(hazard)
 
+func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int) -> void:
+	if lane > 2:
+		return
+	var chance: float = 0.045
+	if rift_active:
+		chance = 0.03
+	if rng.randf() > chance:
+		return
+	var min_offset: float = minf(100.0, width * 0.35)
+	var max_offset: float = maxf(min_offset + 8.0, width - 70.0)
+	var hx: float = x + rng.randf_range(min_offset, max_offset)
+	var hy: float = y - 72.0
+	var pickup: Area2D = _create_health_pickup(Vector2(hx, hy))
+	health_pickups.append(pickup)
+	add_child(pickup)
+
+func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
+	if rng.randf() > 0.22:
+		return
+	var candidates: Array[int] = []
+	if lane > 0:
+		candidates.append(lane - 1)
+	if lane < LANE_Y.size() - 1:
+		candidates.append(lane + 1)
+	if candidates.is_empty():
+		return
+	var alt_lane: int = candidates[rng.randi_range(0, candidates.size() - 1)]
+	var alt_width: float = clampf(width * rng.randf_range(0.48, 0.72), 170.0, 290.0)
+	var min_start: float = x + 70.0
+	var max_start: float = x + width - alt_width - 45.0
+	if max_start <= min_start:
+		return
+	var alt_x: float = rng.randf_range(min_start, max_start)
+	var alt_y: float = LANE_Y[alt_lane]
+	var alt_platform: StaticBody2D = _create_platform(alt_x, alt_y, alt_width)
+	platforms.append(alt_platform)
+	add_child(alt_platform)
+	_place_coins(alt_x, alt_y, alt_width, alt_lane)
+	if rng.randf() < 0.4:
+		_maybe_place_health_pickup(alt_x, alt_y, alt_width, alt_lane)
+
 func _create_coin(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
 	area.position = pos
@@ -275,10 +323,37 @@ func _create_hazard(pos: Vector2) -> Area2D:
 	area.body_entered.connect(_on_hazard_body_entered)
 	return area
 
+func _create_health_pickup(pos: Vector2) -> Area2D:
+	var area: Area2D = Area2D.new()
+	area.position = pos
+
+	var shape: CollisionShape2D = CollisionShape2D.new()
+	var circle: CircleShape2D = CircleShape2D.new()
+	circle.radius = 12.0
+	shape.shape = circle
+	area.add_child(shape)
+
+	var core: Polygon2D = Polygon2D.new()
+	core.polygon = PackedVector2Array([
+		Vector2(-10, -4), Vector2(-4, -4), Vector2(-4, -10), Vector2(4, -10),
+		Vector2(4, -4), Vector2(10, -4), Vector2(10, 4), Vector2(4, 4),
+		Vector2(4, 10), Vector2(-4, 10), Vector2(-4, 4), Vector2(-10, 4)
+	])
+	core.color = Color(0.40, 0.96, 0.50)
+	area.add_child(core)
+
+	area.body_entered.connect(_on_health_pickup_body_entered.bind(area))
+	return area
+
 func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 	if body != player:
 		return
 	bonus_score += 25
+	total_coins_collected += 1
+	while total_coins_collected >= next_bonus_heart_at:
+		_apply_health_delta(1)
+		next_bonus_heart_at += COINS_PER_BONUS_HEART
+		info_label.text = "Coin milestone reached! +1 HP | Next at %d coins" % next_bonus_heart_at
 	if mission_type == MissionType.COINS:
 		mission_progress += 1
 	coins.erase(coin)
@@ -287,11 +362,17 @@ func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 func _on_hazard_body_entered(body: Node) -> void:
 	if body != player:
 		return
-	health -= 1
+	_apply_health_delta(-1)
 	mission_no_hit_start_x = player.global_position.x
-	health_label.text = "Health: %d" % health
 	if health <= 0:
 		get_tree().change_scene_to_file("res://scenes/Menu.tscn")
+
+func _on_health_pickup_body_entered(body: Node, pickup: Area2D) -> void:
+	if body != player:
+		return
+	_apply_health_delta(1)
+	health_pickups.erase(pickup)
+	pickup.queue_free()
 
 func _cleanup_old() -> void:
 	var limit: float = player.global_position.x - DESPAWN_BEHIND
@@ -310,6 +391,11 @@ func _cleanup_old() -> void:
 		if h.global_position.x < limit:
 			hazards.erase(h)
 			h.queue_free()
+
+	for hp: Area2D in health_pickups.duplicate():
+		if hp.global_position.x < limit:
+			health_pickups.erase(hp)
+			hp.queue_free()
 
 func _pick_reachable_lane(previous_lane: int) -> int:
 	var picked: int = rng.randi_range(maxi(0, previous_lane - 1), mini(LANE_Y.size() - 1, previous_lane + 1))
@@ -397,3 +483,7 @@ func _mission_text() -> String:
 		MissionType.NO_HIT_DISTANCE:
 			return "Mission %d: No-hit %dpx (%d/%d)%s" % [mission_tier, mission_target, mission_progress, mission_target, suffix]
 	return "Mission: --"
+
+func _apply_health_delta(delta: int) -> void:
+	health = clampi(health + delta, 0, MAX_HEALTH)
+	health_label.text = "Health: %d" % health
