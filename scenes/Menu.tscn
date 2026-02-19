@@ -41,6 +41,16 @@ layout_mode = 2
 text = "ENDLESS RUNNER REDUX"
 horizontal_alignment = 1
 
+[node name="LastScoreLabel" type="Label" parent="Center"]
+layout_mode = 2
+text = "Last Run: --"
+horizontal_alignment = 1
+
+[node name="BestScoreLabel" type="Label" parent="Center"]
+layout_mode = 2
+text = "Best Run: --"
+horizontal_alignment = 1
+
 [node name="StartButton" type="Button" parent="Center"]
 layout_mode = 2
 text = "Start"

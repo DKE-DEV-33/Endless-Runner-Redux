@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-0.8.3"
+const BUILD_VERSION: String = "build-0.9.0"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -19,7 +19,7 @@ const MISSION_BONUS_BASE: int = 500
 const MAX_HEALTH: int = 5
 const COINS_PER_BONUS_HEART: int = 100
 const SECTION_LENGTH: float = 2300.0
-const ALT_ROUTE_VERTICAL_GAP_MIN: float = 120.0
+const ALT_ROUTE_VERTICAL_GAP_MIN: float = 104.0
 const ALT_ROUTE_EXTRA_LIFT: float = 88.0
 const ALT_ROUTE_MIN_WIDTH: float = 300.0
 const ALT_ROUTE_MAX_WIDTH: float = 460.0
@@ -105,7 +105,7 @@ func _process(delta: float) -> void:
 	_update_section_progression()
 
 	distance_score = int(player.global_position.x / 12.0)
-	score_label.text = "Score: %d" % (distance_score + bonus_score)
+	score_label.text = "Score: %d" % _current_score()
 
 	if _bootstrap_active():
 		status_label.text = "Status: BOOTSTRAP"
@@ -124,7 +124,7 @@ func _process(delta: float) -> void:
 	_cleanup_old()
 
 	if player.global_position.y > 900.0:
-		get_tree().change_scene_to_file("res://scenes/Menu.tscn")
+		_end_run_and_return_to_menu()
 
 func _build_static_opening() -> void:
 	var x: float = START_PLATFORM_X
@@ -281,36 +281,25 @@ func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, cha
 	add_child(pickup)
 
 func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
-	if rng.randf() > 0.26:
+	if rng.randf() > 0.40:
 		return
-	var candidates: Array[int] = []
-	for offset: int in [-2, -1, 1, 2]:
-		var candidate_lane: int = lane + offset
-		if candidate_lane < 0 or candidate_lane >= LANE_Y.size():
-			continue
-		var y_gap: float = absf(LANE_Y[candidate_lane] - LANE_Y[lane])
-		if y_gap >= ALT_ROUTE_VERTICAL_GAP_MIN:
-			candidates.append(candidate_lane)
-	if candidates.is_empty():
-		return
-	var alt_lane: int = candidates[rng.randi_range(0, candidates.size() - 1)]
 	var alt_width: float = clampf(width * rng.randf_range(0.70, 1.00), ALT_ROUTE_MIN_WIDTH, ALT_ROUTE_MAX_WIDTH)
 	var min_start: float = x + 70.0
 	var max_start: float = x + width - alt_width - 45.0
 	if max_start <= min_start:
 		return
 	var alt_x: float = rng.randf_range(min_start, max_start)
-	var alt_y: float = LANE_Y[alt_lane] - ALT_ROUTE_EXTRA_LIFT
+	var alt_y: float = maxf(228.0, LANE_Y[lane] - ALT_ROUTE_VERTICAL_GAP_MIN - ALT_ROUTE_EXTRA_LIFT)
 	var alt_platform: StaticBody2D = _create_platform(alt_x, alt_y, alt_width)
 	platforms.append(alt_platform)
 	add_child(alt_platform)
-	_place_coins(alt_x, alt_y, alt_width, alt_lane)
+	_place_coins(alt_x, alt_y, alt_width, 3)
 	# Alt route is the risk/reward lane: always add some danger, then occasional heal.
 	danger_routes_since_health += 1
 	if rng.randf() < 0.65:
 		_spawn_hazard_single(alt_x, alt_y, alt_width)
 	var health_spawn_chance: float = _compute_health_spawn_chance()
-	_maybe_place_health_pickup(alt_x, alt_y, alt_width, alt_lane, health_spawn_chance)
+	_maybe_place_health_pickup(alt_x, alt_y, alt_width, 3, health_spawn_chance)
 
 func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int) -> void:
 	if lane > 2:
@@ -433,7 +422,7 @@ func _on_hazard_body_entered(body: Node) -> void:
 	_apply_health_delta(-1)
 	mission_no_hit_start_x = player.global_position.x
 	if health <= 0:
-		get_tree().change_scene_to_file("res://scenes/Menu.tscn")
+		_end_run_and_return_to_menu()
 
 func _on_health_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 	if body != player:
@@ -610,3 +599,31 @@ func _compute_health_spawn_chance() -> float:
 		return 0.95
 
 	return clampf(chance, 0.04, 0.90)
+
+func _current_score() -> int:
+	return distance_score + bonus_score
+
+func _end_run_and_return_to_menu() -> void:
+	var run_score: int = _current_score()
+	var best_score: int = _load_best_score()
+	var is_new_best: bool = run_score > best_score
+	if is_new_best:
+		best_score = run_score
+		_save_best_score(best_score)
+
+	get_tree().set_meta("last_score", run_score)
+	get_tree().set_meta("best_score", best_score)
+	get_tree().set_meta("is_new_best", is_new_best)
+	get_tree().change_scene_to_file("res://scenes/Menu.tscn")
+
+func _load_best_score() -> int:
+	var config: ConfigFile = ConfigFile.new()
+	var err: int = config.load("user://run_stats.cfg")
+	if err != OK:
+		return 0
+	return int(config.get_value("scores", "best_score", 0))
+
+func _save_best_score(score: int) -> void:
+	var config: ConfigFile = ConfigFile.new()
+	config.set_value("scores", "best_score", score)
+	config.save("user://run_stats.cfg")
