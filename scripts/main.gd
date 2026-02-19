@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.1.0"
+const BUILD_VERSION: String = "build-1.2.0"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -23,6 +23,10 @@ const ALT_ROUTE_VERTICAL_GAP_MIN: float = 104.0
 const ALT_ROUTE_EXTRA_LIFT: float = 88.0
 const ALT_ROUTE_MIN_WIDTH: float = 220.0
 const ALT_ROUTE_MAX_WIDTH: float = 340.0
+const BRANCH_CHAIN_CHANCE: float = 0.22
+const BRANCH_CHAIN_MAX: int = 2
+const BRANCH_MIN_WIDTH: float = 150.0
+const BRANCH_MAX_WIDTH: float = 280.0
 const SPEED_PICKUP_CHANCE: float = 0.025
 const SPEED_PICKUP_MAX_CHANCE: float = 0.085
 const SPEED_PICKUP_PITY_SEGMENTS: int = 18
@@ -99,6 +103,7 @@ var big_coins: Array[Area2D] = []
 var hazards: Array[Area2D] = []
 var health_pickups: Array[Area2D] = []
 var speed_pickups: Array[Area2D] = []
+var branch_chain_remaining: int = 0
 
 func _ready() -> void:
 	_setup_run_mode_and_seed()
@@ -115,7 +120,7 @@ func _ready() -> void:
 	health_label.text = "Health: %d" % health
 	status_label.text = "Status: BOOTSTRAP"
 	mission_label.text = _mission_text()
-	info_label.text = "Mode: %s | Space: jump | Down+Jump: drop | Left/Right: pace | Big coin: x10" % run_mode.capitalize()
+	info_label.text = "Mode: %s | cyan=up-through | amber=drop-through | purple=ghost | Big coin: x10" % run_mode.capitalize()
 	version_label.text = "Version: %s" % BUILD_VERSION
 	_setup_pause_ui()
 
@@ -198,7 +203,7 @@ func _spawn_segment() -> void:
 	var speed_spawned: bool = _maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane)
 	if not speed_spawned and routes_since_speed_pickup >= SPEED_PICKUP_PITY_SEGMENTS and player.get_pace_level() >= 4:
 		_maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane, 1.0)
-	_maybe_spawn_alt_route(next_spawn_x, segment_len, lane)
+	_spawn_branch_routes(next_spawn_x, segment_len, lane)
 
 	var gap: float = _safe_gap_for_transition(last_lane, lane)
 	next_spawn_x += segment_len + gap
@@ -247,9 +252,9 @@ func _create_platform(x: float, y: float, width: float, platform_type: int) -> S
 	if platform_type == PlatformType.GHOST:
 		visual.color = Color(0.38, 0.35, 0.58, 0.55)
 	elif platform_type == PlatformType.DROP_THROUGH:
-		visual.color = Color(0.30, 0.46, 0.62)
+		visual.color = Color(0.64, 0.45, 0.19)
 	elif platform_type == PlatformType.ONE_WAY_UP:
-		visual.color = Color(0.30, 0.42, 0.54)
+		visual.color = Color(0.20, 0.49, 0.66)
 	else:
 		visual.color = Color(0.36, 0.42, 0.52)
 	body.add_child(visual)
@@ -261,10 +266,54 @@ func _create_platform(x: float, y: float, width: float, platform_type: int) -> S
 		Vector2(width * 0.5, -PLATFORM_THICKNESS * 0.2),
 		Vector2(-width * 0.5, -PLATFORM_THICKNESS * 0.2)
 	])
-	top_strip.color = Color(0.68, 0.84, 0.98)
+	if platform_type == PlatformType.GHOST:
+		top_strip.color = Color(0.84, 0.72, 1.0, 0.65)
+	elif platform_type == PlatformType.DROP_THROUGH:
+		top_strip.color = Color(1.0, 0.84, 0.30)
+	elif platform_type == PlatformType.ONE_WAY_UP:
+		top_strip.color = Color(0.50, 0.94, 1.0)
+	else:
+		top_strip.color = Color(0.68, 0.84, 0.98)
 	body.add_child(top_strip)
 
+	if platform_type == PlatformType.ONE_WAY_UP:
+		_add_platform_chevrons(body, width, true, false, Color(0.72, 0.97, 1.0))
+	elif platform_type == PlatformType.DROP_THROUGH:
+		_add_platform_chevrons(body, width, true, true, Color(1.0, 0.92, 0.54))
+	elif platform_type == PlatformType.GHOST:
+		_add_platform_chevrons(body, width, true, true, Color(0.94, 0.82, 1.0, 0.75))
+		var ghost_core: Polygon2D = Polygon2D.new()
+		ghost_core.polygon = PackedVector2Array([
+			Vector2(-width * 0.5 + 8.0, 0),
+			Vector2(width * 0.5 - 8.0, 0),
+			Vector2(width * 0.5 - 8.0, 4.0),
+			Vector2(-width * 0.5 + 8.0, 4.0)
+		])
+		ghost_core.color = Color(0.82, 0.66, 1.0, 0.45)
+		body.add_child(ghost_core)
+
 	return body
+
+func _add_platform_chevrons(body: StaticBody2D, width: float, show_up: bool, show_down: bool, color: Color) -> void:
+	var spacing: float = 30.0
+	var count: int = maxi(2, mini(10, int(width / spacing)))
+	for i: int in count:
+		var t: float = float(i + 1) / float(count + 1)
+		var cx: float = lerpf(-width * 0.5 + 10.0, width * 0.5 - 10.0, t)
+		if show_up:
+			var up_mark: Polygon2D = Polygon2D.new()
+			up_mark.polygon = PackedVector2Array([
+				Vector2(cx - 5.0, -6.0), Vector2(cx, -11.0), Vector2(cx + 5.0, -6.0)
+			])
+			up_mark.color = color
+			body.add_child(up_mark)
+		if show_down:
+			var down_mark: Polygon2D = Polygon2D.new()
+			down_mark.polygon = PackedVector2Array([
+				Vector2(cx - 5.0, 7.0), Vector2(cx, 12.0), Vector2(cx + 5.0, 7.0)
+			])
+			down_mark.color = color
+			body.add_child(down_mark)
 
 func _place_coins(x: float, y: float, width: float, lane: int) -> void:
 	var count: int = 4 + int(width / 180.0)
@@ -357,40 +406,65 @@ func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, cha
 	add_child(pickup)
 	return true
 
-func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
-	if rng.randf() > 0.33:
+func _spawn_branch_routes(x: float, width: float, base_lane: int) -> void:
+	var spawn_branches: bool = false
+	if branch_chain_remaining > 0:
+		spawn_branches = true
+		branch_chain_remaining -= 1
+	elif rng.randf() < BRANCH_CHAIN_CHANCE:
+		spawn_branches = true
+		branch_chain_remaining = rng.randi_range(0, BRANCH_CHAIN_MAX)
+
+	if not spawn_branches:
 		return
-	var alt_width: float = clampf(width * rng.randf_range(0.52, 0.78), ALT_ROUTE_MIN_WIDTH, ALT_ROUTE_MAX_WIDTH)
-	var min_start: float = x + 70.0
-	var max_start: float = x + width - alt_width - 28.0
+
+	var branch_lanes: Array[int] = [0, 1, 2]
+	branch_lanes.erase(base_lane)
+	if branch_lanes.is_empty():
+		return
+
+	# About half the time, intentionally skip one branch lane to create stronger divergence.
+	if branch_lanes.size() > 1 and rng.randf() < 0.52:
+		branch_lanes = [branch_lanes[rng.randi_range(0, branch_lanes.size() - 1)]]
+
+	for lane_idx: int in branch_lanes:
+		_spawn_single_branch_platform(x, width, base_lane, lane_idx)
+
+func _spawn_single_branch_platform(x: float, width: float, base_lane: int, target_lane: int) -> void:
+	var lane_delta: int = absi(target_lane - base_lane)
+	if lane_delta <= 0:
+		return
+
+	var alt_width: float = clampf(width * rng.randf_range(0.48, 0.72), BRANCH_MIN_WIDTH, BRANCH_MAX_WIDTH)
+	var min_start: float = x + 48.0
+	var max_start: float = x + width - alt_width - 22.0
 	if max_start <= min_start:
 		return
-	var alt_x: float = rng.randf_range(min_start, max_start)
-	var alt_y: float = clampf(
-		LANE_Y[lane] - ALT_ROUTE_VERTICAL_GAP_MIN - ALT_ROUTE_EXTRA_LIFT,
-		118.0,
-		LANE_Y[lane] - ALT_ROUTE_VERTICAL_GAP_MIN
-	)
-	var alt_type_roll: float = rng.randf()
-	var alt_platform_type: int = PlatformType.ONE_WAY_UP
-	if alt_type_roll < 0.60:
-		alt_platform_type = PlatformType.DROP_THROUGH
-	elif alt_type_roll > 0.94:
-		alt_platform_type = PlatformType.GHOST
 
-	var alt_platform: StaticBody2D = _create_platform(alt_x, alt_y, alt_width, alt_platform_type)
-	platforms.append(alt_platform)
-	add_child(alt_platform)
-	_place_coins(alt_x, alt_y, alt_width, 2)
-	_maybe_place_big_coin(alt_x, alt_y, alt_width, 2, 0.34)
-	# Alt route is the risk/reward lane: always add some danger, then occasional heal.
+	var alt_x: float = rng.randf_range(min_start, max_start)
+	var target_y: float = LANE_Y[target_lane]
+	var type_roll: float = rng.randf()
+	var platform_type: int = PlatformType.ONE_WAY_UP
+	if type_roll < 0.52:
+		platform_type = PlatformType.DROP_THROUGH
+	elif type_roll > 0.95:
+		platform_type = PlatformType.GHOST
+
+	var branch_platform: StaticBody2D = _create_platform(alt_x, target_y, alt_width, platform_type)
+	platforms.append(branch_platform)
+	add_child(branch_platform)
+
+	_place_coins(alt_x, target_y, alt_width, target_lane)
+	_maybe_place_big_coin(alt_x, target_y, alt_width, target_lane, 0.30 + (0.08 * float(lane_delta - 1)))
+
 	danger_routes_since_health += 1
-	if rng.randf() < 0.65:
-		_spawn_hazard_single(alt_x, alt_y, alt_width)
+	if rng.randf() < 0.60 + (0.08 * float(lane_delta - 1)):
+		_spawn_hazard_single(alt_x, target_y, alt_width)
+
 	var health_spawn_chance: float = _compute_health_spawn_chance()
-	var health_spawned: bool = _maybe_place_health_pickup(alt_x, alt_y, alt_width, 3, health_spawn_chance)
+	var health_spawned: bool = _maybe_place_health_pickup(alt_x, target_y, alt_width, target_lane, health_spawn_chance)
 	if not health_spawned and health <= 3 and danger_routes_since_health >= HEALTH_PICKUP_PITY_DANGER_ROUTES:
-		_maybe_place_health_pickup(alt_x, alt_y, alt_width, 3, 1.0)
+		_maybe_place_health_pickup(alt_x, target_y, alt_width, target_lane, 1.0)
 
 func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int, override_chance: float = -1.0) -> bool:
 	if lane > 2:
