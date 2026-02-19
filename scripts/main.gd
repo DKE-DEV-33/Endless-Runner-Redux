@@ -31,7 +31,7 @@ const SECTION_COLORS: Array[Color] = [
 	Color(0.09, 0.06, 0.08),
 ]
 
-@onready var player: RunnerPlayer = $Player
+@onready var player = $Player
 @onready var world_background: ColorRect = $WorldBackground
 @onready var score_label: Label = $CanvasLayer/ScoreLabel
 @onready var health_label: Label = $CanvasLayer/HealthLabel
