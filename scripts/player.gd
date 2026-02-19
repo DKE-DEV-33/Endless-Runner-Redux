@@ -18,6 +18,8 @@ const COYOTE_TIME := 0.09
 const JUMP_BUFFER := 0.12
 const MAX_AIR_JUMPS := 1
 const JUMP_RELEASE_CUT := 0.48
+const ONE_WAY_PLATFORM_MASK := 1 << 1
+const DROP_THROUGH_TIME := 0.22
 
 var coyote_timer := 0.0
 var jump_buffer_timer := 0.0
@@ -25,8 +27,19 @@ var jump_hold_timer := 0.0
 var air_jumps_used := 0
 var current_run_speed := BASE_RUN_SPEED
 var pace_level := 0
+var drop_through_timer := 0.0
+
+func _ready() -> void:
+	# We keep one-way platforms on layer 2, while solids remain on layer 1.
+	collision_mask |= ONE_WAY_PLATFORM_MASK
 
 func _physics_process(delta: float) -> void:
+	drop_through_timer = max(drop_through_timer - delta, 0.0)
+	if drop_through_timer > 0.0:
+		collision_mask &= ~ONE_WAY_PLATFORM_MASK
+	else:
+		collision_mask |= ONE_WAY_PLATFORM_MASK
+
 	var pace_bonus: float = float(pace_level) * PACE_LEVEL_STEP
 	var section_base_speed: float = BASE_RUN_SPEED + pace_bonus
 	var section_min_speed: float = MIN_RUN_SPEED + pace_bonus
@@ -53,7 +66,12 @@ func _physics_process(delta: float) -> void:
 		coyote_timer = max(coyote_timer - delta, 0.0)
 
 	if Input.is_action_just_pressed("jump"):
-		jump_buffer_timer = JUMP_BUFFER
+		# Down+jump on floor drops through one-way/drop-through platforms.
+		if Input.is_action_pressed("ui_down") and is_on_floor():
+			drop_through_timer = DROP_THROUGH_TIME
+			jump_buffer_timer = 0.0
+		else:
+			jump_buffer_timer = JUMP_BUFFER
 	else:
 		jump_buffer_timer = max(jump_buffer_timer - delta, 0.0)
 

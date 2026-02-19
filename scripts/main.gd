@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.0.3"
+const BUILD_VERSION: String = "build-1.1.0"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -29,8 +29,11 @@ const SPEED_PICKUP_PITY_SEGMENTS: int = 18
 const HAZARD_HIT_COOLDOWN: float = 0.45
 const SETTINGS_FILE: String = "user://settings.cfg"
 const HEALTH_PICKUP_PITY_DANGER_ROUTES: int = 5
+const BIG_COIN_VALUE: int = 10
+const PLATFORM_LAYER_SOLID: int = 1
+const PLATFORM_LAYER_ONE_WAY: int = 2
 
-const LANE_Y: Array[float] = [448.0, 398.0, 352.0, 308.0]
+const LANE_Y: Array[float] = [448.0, 364.0, 282.0]
 const SECTION_COLORS: Array[Color] = [
 	Color(0.03, 0.05, 0.09),
 	Color(0.05, 0.08, 0.14),
@@ -86,11 +89,13 @@ var rift_until: float = 0.0
 var next_rift_at: float = 0.0
 
 enum MissionType { COINS, SURVIVE_TIME, NO_HIT_DISTANCE }
+enum PlatformType { SOLID, ONE_WAY_UP, DROP_THROUGH, GHOST }
 var mission_type: int = MissionType.COINS
 var mission_no_hit_start_x: float = 0.0
 
 var platforms: Array[Node2D] = []
 var coins: Array[Area2D] = []
+var big_coins: Array[Area2D] = []
 var hazards: Array[Area2D] = []
 var health_pickups: Array[Area2D] = []
 var speed_pickups: Array[Area2D] = []
@@ -110,7 +115,7 @@ func _ready() -> void:
 	health_label.text = "Health: %d" % health
 	status_label.text = "Status: BOOTSTRAP"
 	mission_label.text = _mission_text()
-	info_label.text = "Mode: %s | Space: jump | Left/Right: pace | 100 coins: +1 HP" % run_mode.capitalize()
+	info_label.text = "Mode: %s | Space: jump | Down+Jump: drop | Left/Right: pace | Big coin: x10" % run_mode.capitalize()
 	version_label.text = "Version: %s" % BUILD_VERSION
 	_setup_pause_ui()
 
@@ -168,7 +173,8 @@ func _build_static_opening() -> void:
 
 func _spawn_fixed_platform(start_x: float, lane: int, width: float, gap_after: float, add_coins: bool) -> float:
 	var y: float = LANE_Y[lane]
-	var platform: StaticBody2D = _create_platform(start_x, y, width)
+	var platform_type: int = PlatformType.SOLID if lane == 0 else PlatformType.ONE_WAY_UP
+	var platform: StaticBody2D = _create_platform(start_x, y, width, platform_type)
 	platforms.append(platform)
 	add_child(platform)
 	if add_coins:
@@ -179,12 +185,14 @@ func _spawn_segment() -> void:
 	var segment_len: float = _pick_segment_length()
 	var lane: int = _pick_reachable_lane(last_lane)
 	var y: float = LANE_Y[lane]
+	var platform_type: int = _pick_platform_type_for_lane(lane)
 
-	var platform: StaticBody2D = _create_platform(next_spawn_x, y, segment_len)
+	var platform: StaticBody2D = _create_platform(next_spawn_x, y, segment_len, platform_type)
 	platforms.append(platform)
 	add_child(platform)
 
 	_place_coins(next_spawn_x, y, segment_len, lane)
+	_maybe_place_big_coin(next_spawn_x, y, segment_len, lane)
 	_place_hazards(next_spawn_x, y, segment_len, lane)
 	routes_since_speed_pickup += 1
 	var speed_spawned: bool = _maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane)
@@ -202,15 +210,32 @@ func _pick_segment_length() -> float:
 	var min_len: float = MIN_SEGMENT + (MAX_SEGMENT - MIN_SEGMENT) * tier_scale
 	return rng.randf_range(min_len, MAX_SEGMENT)
 
-func _create_platform(x: float, y: float, width: float) -> StaticBody2D:
+func _pick_platform_type_for_lane(lane: int) -> int:
+	if lane == 0:
+		return PlatformType.SOLID
+	var roll: float = rng.randf()
+	if roll < 0.48:
+		return PlatformType.ONE_WAY_UP
+	if roll < 0.86:
+		return PlatformType.DROP_THROUGH
+	return PlatformType.SOLID
+
+func _create_platform(x: float, y: float, width: float, platform_type: int) -> StaticBody2D:
 	var body: StaticBody2D = StaticBody2D.new()
 	body.position = Vector2(x + width * 0.5, y)
 
-	var collision: CollisionShape2D = CollisionShape2D.new()
-	var rect_shape: RectangleShape2D = RectangleShape2D.new()
-	rect_shape.size = Vector2(width, PLATFORM_THICKNESS)
-	collision.shape = rect_shape
-	body.add_child(collision)
+	if platform_type != PlatformType.GHOST:
+		var collision: CollisionShape2D = CollisionShape2D.new()
+		var rect_shape: RectangleShape2D = RectangleShape2D.new()
+		rect_shape.size = Vector2(width, PLATFORM_THICKNESS)
+		collision.shape = rect_shape
+		if platform_type == PlatformType.ONE_WAY_UP or platform_type == PlatformType.DROP_THROUGH:
+			collision.one_way_collision = true
+			collision.one_way_collision_margin = 8.0
+			body.collision_layer = 1 << (PLATFORM_LAYER_ONE_WAY - 1)
+		else:
+			body.collision_layer = 1 << (PLATFORM_LAYER_SOLID - 1)
+		body.add_child(collision)
 
 	var visual: Polygon2D = Polygon2D.new()
 	visual.polygon = PackedVector2Array([
@@ -219,7 +244,14 @@ func _create_platform(x: float, y: float, width: float) -> StaticBody2D:
 		Vector2(width * 0.5, PLATFORM_THICKNESS * 0.5),
 		Vector2(-width * 0.5, PLATFORM_THICKNESS * 0.5)
 	])
-	visual.color = Color(0.36, 0.42, 0.52)
+	if platform_type == PlatformType.GHOST:
+		visual.color = Color(0.38, 0.35, 0.58, 0.55)
+	elif platform_type == PlatformType.DROP_THROUGH:
+		visual.color = Color(0.30, 0.46, 0.62)
+	elif platform_type == PlatformType.ONE_WAY_UP:
+		visual.color = Color(0.30, 0.42, 0.54)
+	else:
+		visual.color = Color(0.36, 0.42, 0.52)
 	body.add_child(visual)
 
 	var top_strip: Polygon2D = Polygon2D.new()
@@ -246,6 +278,19 @@ func _place_coins(x: float, y: float, width: float, lane: int) -> void:
 		var coin: Area2D = _create_coin(Vector2(coin_x, coin_y))
 		coins.append(coin)
 		add_child(coin)
+
+func _maybe_place_big_coin(x: float, y: float, width: float, lane: int, chance: float = 0.12) -> void:
+	if lane == 0:
+		return
+	if width < 240.0:
+		return
+	if rng.randf() > chance:
+		return
+	var bx: float = x + rng.randf_range(width * 0.35, width * 0.72)
+	var by: float = y - 72.0
+	var big_coin: Area2D = _create_big_coin(Vector2(bx, by))
+	big_coins.append(big_coin)
+	add_child(big_coin)
 
 func _place_hazards(x: float, y: float, width: float, lane: int) -> void:
 	if lane > 2:
@@ -326,10 +371,18 @@ func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
 		118.0,
 		LANE_Y[lane] - ALT_ROUTE_VERTICAL_GAP_MIN
 	)
-	var alt_platform: StaticBody2D = _create_platform(alt_x, alt_y, alt_width)
+	var alt_type_roll: float = rng.randf()
+	var alt_platform_type: int = PlatformType.ONE_WAY_UP
+	if alt_type_roll < 0.60:
+		alt_platform_type = PlatformType.DROP_THROUGH
+	elif alt_type_roll > 0.94:
+		alt_platform_type = PlatformType.GHOST
+
+	var alt_platform: StaticBody2D = _create_platform(alt_x, alt_y, alt_width, alt_platform_type)
 	platforms.append(alt_platform)
 	add_child(alt_platform)
-	_place_coins(alt_x, alt_y, alt_width, 3)
+	_place_coins(alt_x, alt_y, alt_width, 2)
+	_maybe_place_big_coin(alt_x, alt_y, alt_width, 2, 0.34)
 	# Alt route is the risk/reward lane: always add some danger, then occasional heal.
 	danger_routes_since_health += 1
 	if rng.randf() < 0.65:
@@ -375,6 +428,26 @@ func _create_coin(pos: Vector2) -> Area2D:
 	area.add_child(sprite)
 
 	area.body_entered.connect(_on_coin_body_entered.bind(area))
+	return area
+
+func _create_big_coin(pos: Vector2) -> Area2D:
+	var area: Area2D = Area2D.new()
+	area.position = pos
+
+	var shape: CollisionShape2D = CollisionShape2D.new()
+	var circle: CircleShape2D = CircleShape2D.new()
+	circle.radius = 15.0
+	shape.shape = circle
+	area.add_child(shape)
+
+	var sprite: Polygon2D = Polygon2D.new()
+	sprite.polygon = PackedVector2Array([
+		Vector2(-14, 0), Vector2(0, -14), Vector2(14, 0), Vector2(0, 14)
+	])
+	sprite.color = Color(1.0, 0.65, 0.12)
+	area.add_child(sprite)
+
+	area.body_entered.connect(_on_big_coin_body_entered.bind(area))
 	return area
 
 func _create_hazard(pos: Vector2) -> Area2D:
@@ -455,6 +528,21 @@ func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 	coins.erase(coin)
 	coin.queue_free()
 
+func _on_big_coin_body_entered(body: Node, big_coin: Area2D) -> void:
+	if body != player:
+		return
+	_play_sfx_tone(1120.0, 0.08, -11.0)
+	bonus_score += 25 * BIG_COIN_VALUE
+	total_coins_collected += BIG_COIN_VALUE
+	while total_coins_collected >= next_bonus_heart_at:
+		_apply_health_delta(1)
+		next_bonus_heart_at += COINS_PER_BONUS_HEART
+		info_label.text = "Coin milestone reached! +1 HP | Next at %d coins" % next_bonus_heart_at
+	if mission_type == MissionType.COINS:
+		mission_progress += BIG_COIN_VALUE
+	big_coins.erase(big_coin)
+	big_coin.queue_free()
+
 func _on_hazard_body_entered(body: Node) -> void:
 	if body != player:
 		return
@@ -499,6 +587,11 @@ func _cleanup_old() -> void:
 		if c.global_position.x < limit:
 			coins.erase(c)
 			c.queue_free()
+
+	for bc: Area2D in big_coins.duplicate():
+		if bc.global_position.x < limit:
+			big_coins.erase(bc)
+			bc.queue_free()
 
 	for h: Area2D in hazards.duplicate():
 		if h.global_position.x < limit:
