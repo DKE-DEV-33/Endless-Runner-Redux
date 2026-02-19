@@ -1,0 +1,11 @@
+# Godot local/editor state
+.godot/
+
+# Godot import/export artifacts
+.import/
+*.import
+export_presets.cfg
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
