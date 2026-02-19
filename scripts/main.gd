@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.2"
+const BUILD_VERSION: String = "build-1.2.3"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -37,6 +37,7 @@ const BIG_COIN_VALUE: int = 10
 const PLATFORM_LAYER_SOLID: int = 1
 const PLATFORM_LAYER_ONE_WAY: int = 2
 const INFO_NOTICE_DURATION: float = 3.0
+const PARALLAX_BAND_HEIGHT: float = 120.0
 
 const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
@@ -49,6 +50,7 @@ const SECTION_COLORS: Array[Color] = [
 
 @onready var player = $Player
 @onready var world_background: ColorRect = $WorldBackground
+@onready var parallax_decor: Node2D = $ParallaxDecor
 @onready var score_label: Label = $CanvasLayer/ScoreLabel
 @onready var health_label: Label = $CanvasLayer/HealthLabel
 @onready var status_label: Label = $CanvasLayer/StatusLabel
@@ -107,6 +109,7 @@ var hazards: Array[Area2D] = []
 var health_pickups: Array[Area2D] = []
 var speed_pickups: Array[Area2D] = []
 var branch_chain_remaining: int = 0
+var parallax_layers: Array[Dictionary] = []
 
 func _ready() -> void:
 	_setup_run_mode_and_seed()
@@ -116,6 +119,7 @@ func _ready() -> void:
 	player.jump_triggered.connect(_on_player_jump_triggered)
 	mission_no_hit_start_x = player.global_position.x
 	_build_static_opening()
+	_build_parallax_layers()
 	_init_mission()
 	_prewarm_post_bootstrap_route()
 	next_rift_at = rng.randf_range(RIFT_MIN_SECONDS, RIFT_MAX_SECONDS)
@@ -147,6 +151,7 @@ func _process(delta: float) -> void:
 		info_notice = ""
 	_update_rift_state()
 	_update_section_progression()
+	_update_parallax_layers()
 	_refresh_info_label()
 
 	distance_score = int(player.global_position.x / 12.0)
@@ -204,6 +209,8 @@ func _spawn_segment() -> void:
 	var lane: int = _pick_reachable_lane(last_lane)
 	var y: float = LANE_Y[lane]
 	var platform_type: int = _pick_platform_type_for_lane(lane)
+	if platform_type == PlatformType.DROP_THROUGH:
+		_ensure_lane_support(next_spawn_x, segment_len, lane)
 
 	var platform: StaticBody2D = _create_platform(next_spawn_x, y, segment_len, platform_type)
 	platforms.append(platform)
@@ -238,9 +245,43 @@ func _pick_platform_type_for_lane(lane: int) -> int:
 		return PlatformType.DROP_THROUGH
 	return PlatformType.SOLID
 
+func _ensure_lane_support(x: float, width: float, lane: int) -> void:
+	if lane <= 0:
+		return
+	var support_lane: int = lane - 1
+	if _has_lane_covering_platform(support_lane, x, width):
+		return
+
+	var support_y: float = LANE_Y[support_lane]
+	var support_type: int = PlatformType.SOLID if support_lane == 0 else PlatformType.ONE_WAY_UP
+	var support_platform: StaticBody2D = _create_platform(x, support_y, width, support_type)
+	platforms.append(support_platform)
+	add_child(support_platform)
+
+func _has_lane_covering_platform(lane: int, x: float, width: float) -> bool:
+	var min_x: float = x + 12.0
+	var max_x: float = x + width - 12.0
+	for platform: Node2D in platforms:
+		if not is_instance_valid(platform):
+			continue
+		var platform_lane: int = int(platform.get_meta("lane", -1))
+		if platform_lane != lane:
+			continue
+		var platform_start: float = float(platform.get_meta("start_x", 0.0))
+		var platform_width: float = float(platform.get_meta("width", 0.0))
+		var platform_end: float = platform_start + platform_width
+		if platform_start <= min_x and platform_end >= max_x:
+			return true
+	return false
+
 func _create_platform(x: float, y: float, width: float, platform_type: int) -> StaticBody2D:
 	var body: StaticBody2D = StaticBody2D.new()
 	body.position = Vector2(x + width * 0.5, y)
+	var lane_idx: int = _lane_for_y(y)
+	body.set_meta("lane", lane_idx)
+	body.set_meta("start_x", x)
+	body.set_meta("width", width)
+	body.set_meta("platform_type", platform_type)
 
 	if platform_type != PlatformType.GHOST:
 		var collision: CollisionShape2D = CollisionShape2D.new()
@@ -306,6 +347,16 @@ func _create_platform(x: float, y: float, width: float, platform_type: int) -> S
 		body.add_child(ghost_core)
 
 	return body
+
+func _lane_for_y(y: float) -> int:
+	var closest_idx: int = 0
+	var closest_dist: float = absf(y - LANE_Y[0])
+	for idx: int in range(1, LANE_Y.size()):
+		var dist: float = absf(y - LANE_Y[idx])
+		if dist < closest_dist:
+			closest_dist = dist
+			closest_idx = idx
+	return closest_idx
 
 func _add_platform_chevrons(body: StaticBody2D, width: float, show_up: bool, show_down: bool, color: Color) -> void:
 	var spacing: float = 30.0
@@ -468,10 +519,12 @@ func _spawn_single_branch_platform(x: float, width: float, base_lane: int, targe
 	var target_y: float = LANE_Y[target_lane]
 	var type_roll: float = rng.randf()
 	var platform_type: int = PlatformType.ONE_WAY_UP
-	if type_roll < 0.52:
+	if target_lane > 0 and type_roll < 0.52:
 		platform_type = PlatformType.DROP_THROUGH
 	elif type_roll > 0.95:
 		platform_type = PlatformType.GHOST
+	if platform_type == PlatformType.DROP_THROUGH:
+		_ensure_lane_support(alt_x, alt_width, target_lane)
 
 	var branch_platform: StaticBody2D = _create_platform(alt_x, target_y, alt_width, platform_type)
 	platforms.append(branch_platform)
@@ -754,6 +807,7 @@ func _apply_section_theme(section_index: int) -> void:
 		return
 	var color_index: int = section_index % SECTION_COLORS.size()
 	world_background.color = SECTION_COLORS[color_index]
+	_tint_parallax_layers(SECTION_COLORS[color_index])
 
 func _init_mission() -> void:
 	mission_completed = false
@@ -839,7 +893,7 @@ func _compute_health_spawn_chance() -> float:
 	return clampf(chance, 0.04, 0.90)
 
 func _base_info_text() -> String:
-	return "Mode: %s | cyan=up-through | amber=drop-through | purple=ghost | Big coin: x10" % run_mode.capitalize()
+	return "Mode: %s | cyan=up-through | amber=drop-through (Down+Jump) | purple=ghost | Big coin: x10" % run_mode.capitalize()
 
 func _refresh_info_label() -> void:
 	var text: String = _base_info_text()
@@ -991,3 +1045,111 @@ func _create_tone_stream(frequency: float, duration: float) -> AudioStreamWAV:
 	wav.stereo = false
 	wav.data = data
 	return wav
+
+func _build_parallax_layers() -> void:
+	parallax_layers.clear()
+	for child: Node in parallax_decor.get_children():
+		child.queue_free()
+
+	var layer_defs: Array[Dictionary] = [
+		{"name": "FarGlow", "factor": 0.18, "base_y": 290.0, "alpha": 0.20, "jitter": 22.0, "height_min": 36.0, "height_max": 86.0, "step": 220.0, "sway": 8.0},
+		{"name": "MidRuins", "factor": 0.34, "base_y": 364.0, "alpha": 0.30, "jitter": 32.0, "height_min": 52.0, "height_max": 132.0, "step": 180.0, "sway": 13.0},
+		{"name": "NearSteel", "factor": 0.52, "base_y": 436.0, "alpha": 0.42, "jitter": 20.0, "height_min": 44.0, "height_max": 96.0, "step": 200.0, "sway": 18.0},
+	]
+
+	for def: Dictionary in layer_defs:
+		var layer_root: Node2D = Node2D.new()
+		layer_root.name = String(def["name"])
+		parallax_decor.add_child(layer_root)
+		_populate_parallax_layer(layer_root, def)
+		parallax_layers.append({"node": layer_root, "factor": float(def["factor"]), "sway": float(def["sway"])})
+
+	_tint_parallax_layers(world_background.color)
+
+func _populate_parallax_layer(layer_root: Node2D, def: Dictionary) -> void:
+	var base_y: float = float(def["base_y"])
+	var alpha: float = float(def["alpha"])
+	var jitter: float = float(def["jitter"])
+	var height_min: float = float(def["height_min"])
+	var height_max: float = float(def["height_max"])
+	var step: float = float(def["step"])
+	var start_x: float = -2600.0
+	var end_x: float = 18000.0
+	var x: float = start_x
+	var idx: int = 0
+	while x < end_x:
+		var width: float = rng.randf_range(step * 0.65, step * 1.14)
+		var height: float = rng.randf_range(height_min, height_max)
+		var col: Color = Color(
+			0.24 + rng.randf_range(-0.05, 0.08),
+			0.43 + rng.randf_range(-0.05, 0.12),
+			0.62 + rng.randf_range(-0.06, 0.12),
+			alpha
+		)
+
+		var slab: Polygon2D = Polygon2D.new()
+		slab.polygon = PackedVector2Array([
+			Vector2(-width * 0.5, 0.0),
+			Vector2(width * 0.5, 0.0),
+			Vector2(width * 0.5, -height),
+			Vector2(-width * 0.5, -height)
+		])
+		slab.position = Vector2(x + width * 0.5, base_y + rng.randf_range(-jitter, jitter))
+		slab.color = col
+		slab.set_meta("base_x", slab.position.x)
+		slab.set_meta("base_y", slab.position.y)
+		layer_root.add_child(slab)
+
+		if idx % 2 == 0:
+			var cap: Polygon2D = Polygon2D.new()
+			cap.polygon = PackedVector2Array([
+				Vector2(-width * 0.42, -height),
+				Vector2(width * 0.42, -height),
+				Vector2(width * 0.42, -height - PARALLAX_BAND_HEIGHT * 0.10),
+				Vector2(-width * 0.42, -height - PARALLAX_BAND_HEIGHT * 0.10)
+			])
+			cap.position = slab.position
+			cap.color = col.lightened(0.22)
+			cap.set_meta("base_x", cap.position.x)
+			cap.set_meta("base_y", cap.position.y)
+			layer_root.add_child(cap)
+
+		x += step + rng.randf_range(-24.0, 34.0)
+		idx += 1
+
+func _update_parallax_layers() -> void:
+	if parallax_layers.is_empty():
+		return
+	var px: float = player.global_position.x
+	for layer_info: Dictionary in parallax_layers:
+		var layer: Node2D = layer_info["node"]
+		var factor: float = float(layer_info["factor"])
+		var sway: float = float(layer_info["sway"])
+		layer.position.x = px * factor
+		var sway_phase: float = run_seconds * 0.45
+		for piece: Node in layer.get_children():
+			if piece is Polygon2D:
+				var poly: Polygon2D = piece
+				var base_y: float = float(poly.get_meta("base_y", poly.position.y))
+				var base_x: float = float(poly.get_meta("base_x", poly.position.x))
+				var wave: float = sin((base_x * 0.0022) + sway_phase) * sway
+				poly.position.y = base_y + wave
+
+func _tint_parallax_layers(base_color: Color) -> void:
+	if parallax_layers.is_empty():
+		return
+	for layer_info: Dictionary in parallax_layers:
+		var layer: Node2D = layer_info["node"]
+		var factor: float = float(layer_info["factor"])
+		var tint: Color = base_color.lightened(0.34 + (factor * 0.16))
+		tint.a = 1.0
+		for piece: Node in layer.get_children():
+			if piece is Polygon2D:
+				var poly: Polygon2D = piece
+				var original: Color = poly.color
+				poly.color = Color(
+					clampf((original.r * 0.55) + (tint.r * 0.45), 0.0, 1.0),
+					clampf((original.g * 0.55) + (tint.g * 0.45), 0.0, 1.0),
+					clampf((original.b * 0.55) + (tint.b * 0.45), 0.0, 1.0),
+					original.a
+				)
