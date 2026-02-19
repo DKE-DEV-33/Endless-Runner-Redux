@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.0.0"
+const BUILD_VERSION: String = "build-1.0.1"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -23,10 +23,12 @@ const ALT_ROUTE_VERTICAL_GAP_MIN: float = 104.0
 const ALT_ROUTE_EXTRA_LIFT: float = 88.0
 const ALT_ROUTE_MIN_WIDTH: float = 300.0
 const ALT_ROUTE_MAX_WIDTH: float = 460.0
-const SPEED_PICKUP_CHANCE: float = 0.04
-const SPEED_PICKUP_MAX_CHANCE: float = 0.12
+const SPEED_PICKUP_CHANCE: float = 0.07
+const SPEED_PICKUP_MAX_CHANCE: float = 0.18
+const SPEED_PICKUP_PITY_SEGMENTS: int = 10
 const HAZARD_HIT_COOLDOWN: float = 0.45
 const SETTINGS_FILE: String = "user://settings.cfg"
+const HEALTH_PICKUP_PITY_DANGER_ROUTES: int = 5
 
 const LANE_Y: Array[float] = [448.0, 398.0, 352.0, 308.0]
 const SECTION_COLORS: Array[Color] = [
@@ -73,6 +75,7 @@ var run_seconds: float = 0.0
 var current_section: int = 0
 var hazard_hit_cooldown: float = 0.0
 var danger_routes_since_health: int = 0
+var routes_since_speed_pickup: int = 0
 var run_mode: String = "standard"
 var run_seed: int = 0
 var sfx_volume_db: float = -6.0
@@ -182,7 +185,10 @@ func _spawn_segment() -> void:
 
 	_place_coins(next_spawn_x, y, segment_len, lane)
 	_place_hazards(next_spawn_x, y, segment_len, lane)
-	_maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane)
+	routes_since_speed_pickup += 1
+	var speed_spawned: bool = _maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane)
+	if not speed_spawned and routes_since_speed_pickup >= SPEED_PICKUP_PITY_SEGMENTS and player.get_pace_level() >= 2:
+		_maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane, 1.0)
 	_maybe_spawn_alt_route(next_spawn_x, segment_len, lane)
 
 	var gap: float = _safe_gap_for_transition(last_lane, lane)
@@ -289,13 +295,13 @@ func _spawn_hazard_at(pos: Vector2) -> void:
 	hazards.append(hazard)
 	add_child(hazard)
 
-func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, chance: float = 0.18) -> void:
+func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, chance: float = 0.18) -> bool:
 	if lane > 2:
-		return
+		return false
 	if rift_active:
 		chance *= 0.8
 	if rng.randf() > chance:
-		return
+		return false
 	var min_offset: float = minf(100.0, width * 0.35)
 	var max_offset: float = maxf(min_offset + 8.0, width - 70.0)
 	var hx: float = x + rng.randf_range(min_offset, max_offset)
@@ -303,6 +309,7 @@ func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, cha
 	var pickup: Area2D = _create_health_pickup(Vector2(hx, hy))
 	health_pickups.append(pickup)
 	add_child(pickup)
+	return true
 
 func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
 	if rng.randf() > 0.40:
@@ -313,7 +320,11 @@ func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
 	if max_start <= min_start:
 		return
 	var alt_x: float = rng.randf_range(min_start, max_start)
-	var alt_y: float = maxf(228.0, LANE_Y[lane] - ALT_ROUTE_VERTICAL_GAP_MIN - ALT_ROUTE_EXTRA_LIFT)
+	var alt_y: float = clampf(
+		LANE_Y[lane] - ALT_ROUTE_VERTICAL_GAP_MIN - ALT_ROUTE_EXTRA_LIFT,
+		118.0,
+		LANE_Y[lane] - ALT_ROUTE_VERTICAL_GAP_MIN
+	)
 	var alt_platform: StaticBody2D = _create_platform(alt_x, alt_y, alt_width)
 	platforms.append(alt_platform)
 	add_child(alt_platform)
@@ -323,15 +334,19 @@ func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
 	if rng.randf() < 0.65:
 		_spawn_hazard_single(alt_x, alt_y, alt_width)
 	var health_spawn_chance: float = _compute_health_spawn_chance()
-	_maybe_place_health_pickup(alt_x, alt_y, alt_width, 3, health_spawn_chance)
+	var health_spawned: bool = _maybe_place_health_pickup(alt_x, alt_y, alt_width, 3, health_spawn_chance)
+	if not health_spawned and health <= 3 and danger_routes_since_health >= HEALTH_PICKUP_PITY_DANGER_ROUTES:
+		_maybe_place_health_pickup(alt_x, alt_y, alt_width, 3, 1.0)
 
-func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int) -> void:
+func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int, override_chance: float = -1.0) -> bool:
 	if lane > 2:
-		return
+		return false
 	var pace_bonus_chance: float = float(player.get_pace_level()) * 0.006
 	var spawn_chance: float = minf(SPEED_PICKUP_MAX_CHANCE, SPEED_PICKUP_CHANCE + pace_bonus_chance)
+	if override_chance >= 0.0:
+		spawn_chance = override_chance
 	if rng.randf() > spawn_chance:
-		return
+		return false
 	var min_offset: float = minf(90.0, width * 0.32)
 	var max_offset: float = maxf(min_offset + 8.0, width - 60.0)
 	var sx: float = x + rng.randf_range(min_offset, max_offset)
@@ -339,6 +354,7 @@ func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int) -> v
 	var pickup: Area2D = _create_speed_pickup(Vector2(sx, sy))
 	speed_pickups.append(pickup)
 	add_child(pickup)
+	return true
 
 func _create_coin(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
@@ -466,6 +482,7 @@ func _on_speed_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 	var slow_amount: int = 2 if rng.randf() < 0.35 else 1
 	var pace_level: int = player.add_pace_levels(-slow_amount)
 	info_label.text = "Flux stabilizer collected: -%d pace (now %d)" % [slow_amount, pace_level]
+	routes_since_speed_pickup = 0
 	speed_pickups.erase(pickup)
 	pickup.queue_free()
 
