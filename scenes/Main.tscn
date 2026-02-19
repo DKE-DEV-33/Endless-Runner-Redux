@@ -133,7 +133,7 @@ offset_left = 28.0
 offset_top = 662.0
 offset_right = 500.0
 offset_bottom = 690.0
-text = "Version: build-1.2.1"
+text = "Version: build-1.2.2"
 label_settings = SubResource("3")
 
 [node name="PauseLayer" type="CanvasLayer" parent="."]

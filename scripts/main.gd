@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.1"
+const BUILD_VERSION: String = "build-1.2.2"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -37,7 +37,7 @@ const BIG_COIN_VALUE: int = 10
 const PLATFORM_LAYER_SOLID: int = 1
 const PLATFORM_LAYER_ONE_WAY: int = 2
 
-const LANE_Y: Array[float] = [448.0, 364.0, 282.0]
+const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
 	Color(0.03, 0.05, 0.09),
 	Color(0.05, 0.08, 0.14),
@@ -427,7 +427,15 @@ func _spawn_branch_routes(x: float, width: float, base_lane: int) -> void:
 
 	# About half the time, intentionally skip one branch lane to create stronger divergence.
 	if branch_lanes.size() > 1 and rng.randf() < 0.80:
-		branch_lanes = [branch_lanes[rng.randi_range(0, branch_lanes.size() - 1)]]
+		# Prefer the farthest lane to keep branch routes visually and mechanically distinct.
+		var far_lane: int = branch_lanes[0]
+		var far_delta: int = absi(far_lane - base_lane)
+		for candidate_lane: int in branch_lanes:
+			var candidate_delta: int = absi(candidate_lane - base_lane)
+			if candidate_delta > far_delta:
+				far_lane = candidate_lane
+				far_delta = candidate_delta
+		branch_lanes = [far_lane]
 
 	for lane_idx: int in branch_lanes:
 		_spawn_single_branch_platform(x, width, base_lane, lane_idx)
