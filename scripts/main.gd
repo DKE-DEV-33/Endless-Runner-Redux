@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.3"
+const BUILD_VERSION: String = "build-1.2.4"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -38,6 +38,13 @@ const PLATFORM_LAYER_SOLID: int = 1
 const PLATFORM_LAYER_ONE_WAY: int = 2
 const INFO_NOTICE_DURATION: float = 3.0
 const PARALLAX_BAND_HEIGHT: float = 120.0
+const DROP_THROUGH_BASE_CHANCE: float = 0.20
+const DROP_THROUGH_PITY_CHANCE: float = 0.28
+const DROP_THROUGH_SUPPRESS_CHANCE: float = 0.08
+const DROP_THROUGH_SUPPRESS_SEGMENTS: int = 2
+const DROP_THROUGH_PITY_SEGMENTS: int = 6
+const BRANCH_DROP_THROUGH_CHANCE_MID: float = 0.22
+const BRANCH_DROP_THROUGH_CHANCE_TOP: float = 0.30
 
 const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
@@ -110,6 +117,7 @@ var health_pickups: Array[Area2D] = []
 var speed_pickups: Array[Area2D] = []
 var branch_chain_remaining: int = 0
 var parallax_layers: Array[Dictionary] = []
+var segments_since_drop_through: int = 0
 
 func _ready() -> void:
 	_setup_run_mode_and_seed()
@@ -210,6 +218,10 @@ func _spawn_segment() -> void:
 	var y: float = LANE_Y[lane]
 	var platform_type: int = _pick_platform_type_for_lane(lane)
 	if platform_type == PlatformType.DROP_THROUGH:
+		segments_since_drop_through = 0
+	else:
+		segments_since_drop_through += 1
+	if platform_type == PlatformType.DROP_THROUGH:
 		_ensure_lane_support(next_spawn_x, segment_len, lane)
 
 	var platform: StaticBody2D = _create_platform(next_spawn_x, y, segment_len, platform_type)
@@ -239,9 +251,15 @@ func _pick_platform_type_for_lane(lane: int) -> int:
 	if lane == 0:
 		return PlatformType.SOLID
 	var roll: float = rng.randf()
-	if roll < 0.48:
+	var amber_chance: float = DROP_THROUGH_BASE_CHANCE
+	if segments_since_drop_through <= DROP_THROUGH_SUPPRESS_SEGMENTS:
+		amber_chance = DROP_THROUGH_SUPPRESS_CHANCE
+	elif segments_since_drop_through >= DROP_THROUGH_PITY_SEGMENTS:
+		amber_chance = DROP_THROUGH_PITY_CHANCE
+
+	if roll < 0.62:
 		return PlatformType.ONE_WAY_UP
-	if roll < 0.86:
+	if roll < 0.62 + amber_chance:
 		return PlatformType.DROP_THROUGH
 	return PlatformType.SOLID
 
@@ -519,7 +537,14 @@ func _spawn_single_branch_platform(x: float, width: float, base_lane: int, targe
 	var target_y: float = LANE_Y[target_lane]
 	var type_roll: float = rng.randf()
 	var platform_type: int = PlatformType.ONE_WAY_UP
-	if target_lane > 0 and type_roll < 0.52:
+	var branch_amber_chance: float = BRANCH_DROP_THROUGH_CHANCE_MID
+	if target_lane >= 2:
+		branch_amber_chance = BRANCH_DROP_THROUGH_CHANCE_TOP
+	if segments_since_drop_through <= DROP_THROUGH_SUPPRESS_SEGMENTS:
+		branch_amber_chance *= 0.55
+	elif segments_since_drop_through >= DROP_THROUGH_PITY_SEGMENTS:
+		branch_amber_chance = minf(0.40, branch_amber_chance + 0.12)
+	if target_lane > 0 and type_roll < branch_amber_chance:
 		platform_type = PlatformType.DROP_THROUGH
 	elif type_roll > 0.95:
 		platform_type = PlatformType.GHOST
