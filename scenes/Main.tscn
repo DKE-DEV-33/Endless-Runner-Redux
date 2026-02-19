@@ -62,4 +62,11 @@ offset_left = 24.0
 offset_top = 690.0
 offset_right = 800.0
 offset_bottom = 718.0
-text = "BOOTSTRAP BUILD v2 | Space: Jump | Auto-run"
+text = "Space: Jump | Auto-run"
+
+[node name="VersionLabel" type="Label" parent="CanvasLayer"]
+offset_left = 24.0
+offset_top = 666.0
+offset_right = 500.0
+offset_bottom = 694.0
+text = "Version: build-0.4.1"

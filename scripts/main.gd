@@ -1,4 +1,5 @@
 extends Node2D
+const BUILD_VERSION: String = "build-0.4.1"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -23,6 +24,7 @@ const LANE_Y: Array[float] = [448.0, 398.0, 352.0, 308.0]
 @onready var status_label: Label = $CanvasLayer/StatusLabel
 @onready var mission_label: Label = $CanvasLayer/MissionLabel
 @onready var info_label: Label = $CanvasLayer/InfoLabel
+@onready var version_label: Label = $CanvasLayer/VersionLabel
 
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var next_spawn_x: float = -120.0
@@ -60,7 +62,8 @@ func _ready() -> void:
 	health_label.text = "Health: %d" % health
 	status_label.text = "Status: BOOTSTRAP"
 	mission_label.text = _mission_text()
-	info_label.text = "BOOTSTRAP BUILD v2 | Space: Jump | Auto-run"
+	info_label.text = "Space: Jump | Auto-run"
+	version_label.text = "Version: %s" % BUILD_VERSION
 
 func _process(delta: float) -> void:
 	if not is_instance_valid(player):
