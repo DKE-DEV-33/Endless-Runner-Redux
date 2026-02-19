@@ -11,6 +11,9 @@ const START_PLATFORM_X: float = -260.0
 const START_PLATFORM_LENGTH: float = 1100.0
 const START_LANE: int = 0
 const BOOTSTRAP_RELEASE_OFFSET: float = 420.0
+const RIFT_MIN_SECONDS: float = 16.0
+const RIFT_MAX_SECONDS: float = 28.0
+const RIFT_DURATION: float = 6.0
 
 const LANE_Y: Array[float] = [448.0, 398.0, 352.0, 308.0]
 
@@ -25,11 +28,21 @@ var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var next_spawn_x: float = -120.0
 var bootstrap_release_x: float = 0.0
 
-var score: int = 0
+var distance_score: int = 0
+var bonus_score: int = 0
 var health: int = 3
 var mission_target: int = 40
 var mission_progress: int = 0
 var last_lane: int = START_LANE
+var run_seconds: float = 0.0
+
+var rift_active: bool = false
+var rift_until: float = 0.0
+var next_rift_at: float = 0.0
+
+enum MissionType { COINS, SURVIVE_TIME, NO_HIT_DISTANCE }
+var mission_type: int = MissionType.COINS
+var mission_no_hit_start_x: float = 0.0
 
 var platforms: Array[Node2D] = []
 var coins: Array[Area2D] = []
@@ -39,28 +52,38 @@ func _ready() -> void:
 	rng.randomize()
 	player.global_position = Vector2(120.0, 408.0)
 	player.velocity = Vector2.ZERO
+	mission_no_hit_start_x = player.global_position.x
 	_build_static_opening()
+	_init_mission()
+	next_rift_at = rng.randf_range(RIFT_MIN_SECONDS, RIFT_MAX_SECONDS)
 	score_label.text = "Score: 0"
 	health_label.text = "Health: %d" % health
 	status_label.text = "Status: BOOTSTRAP"
-	mission_label.text = "Mission: Collect %d coins (0/%d)" % [mission_target, mission_target]
+	mission_label.text = _mission_text()
 	info_label.text = "BOOTSTRAP BUILD v2 | Space: Jump | Auto-run"
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 
-	score = int(player.global_position.x / 12.0)
-	score_label.text = "Score: %d" % score
+	run_seconds += delta
+	_update_rift_state()
+
+	distance_score = int(player.global_position.x / 12.0)
+	score_label.text = "Score: %d" % (distance_score + bonus_score)
 
 	if _bootstrap_active():
 		status_label.text = "Status: BOOTSTRAP"
 	else:
-		status_label.text = "Status: LIVE RUN"
+		if rift_active:
+			status_label.text = "Status: RIFT SURGE"
+		else:
+			status_label.text = "Status: LIVE RUN"
 		while next_spawn_x < player.global_position.x + PLAYER_AHEAD_SPAWN:
 			_spawn_segment()
 
-	mission_label.text = "Mission: Collect %d coins (%d/%d)" % [mission_target, mission_progress, mission_target]
+	_update_mission_progress()
+	mission_label.text = _mission_text()
 
 	_cleanup_old()
 
@@ -153,8 +176,13 @@ func _place_hazards(x: float, y: float, width: float, lane: int) -> void:
 	if lane > 1:
 		return
 	var hazard_count: int = 1 if width < 340.0 else 2
+	if rift_active:
+		hazard_count += 1
 	for i: int in hazard_count:
-		if rng.randf() < 0.45:
+		var skip_chance: float = 0.45
+		if rift_active:
+			skip_chance = 0.22
+		if rng.randf() < skip_chance:
 			continue
 		var hx: float = x + rng.randf_range(80.0, maxf(100.0, width - 80.0))
 		var hy: float = y - (PLATFORM_THICKNESS * 0.5) - 12.0
@@ -205,8 +233,9 @@ func _create_hazard(pos: Vector2) -> Area2D:
 func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 	if body != player:
 		return
-	score += 25
-	mission_progress += 1
+	bonus_score += 25
+	if mission_type == MissionType.COINS:
+		mission_progress += 1
 	coins.erase(coin)
 	coin.queue_free()
 
@@ -214,6 +243,7 @@ func _on_hazard_body_entered(body: Node) -> void:
 	if body != player:
 		return
 	health -= 1
+	mission_no_hit_start_x = player.global_position.x
 	health_label.text = "Health: %d" % health
 	if health <= 0:
 		get_tree().change_scene_to_file("res://scenes/Menu.tscn")
@@ -250,3 +280,54 @@ func _safe_gap_for_transition(from_lane: int, to_lane: int) -> float:
 
 func _bootstrap_active() -> bool:
 	return player.global_position.x < bootstrap_release_x
+
+func _update_rift_state() -> void:
+	if _bootstrap_active():
+		return
+	if rift_active:
+		if run_seconds >= rift_until:
+			rift_active = false
+			next_rift_at = run_seconds + rng.randf_range(RIFT_MIN_SECONDS, RIFT_MAX_SECONDS)
+		return
+
+	if run_seconds >= next_rift_at:
+		rift_active = true
+		rift_until = run_seconds + RIFT_DURATION
+
+func _init_mission() -> void:
+	mission_type = rng.randi_range(0, 2)
+	mission_progress = 0
+	match mission_type:
+		MissionType.COINS:
+			mission_target = 40
+		MissionType.SURVIVE_TIME:
+			mission_target = 75
+		MissionType.NO_HIT_DISTANCE:
+			mission_target = 2200
+
+func _update_mission_progress() -> void:
+	if mission_progress >= mission_target:
+		return
+	match mission_type:
+		MissionType.COINS:
+			pass
+		MissionType.SURVIVE_TIME:
+			mission_progress = mini(mission_target, int(run_seconds))
+		MissionType.NO_HIT_DISTANCE:
+			mission_progress = mini(mission_target, int(player.global_position.x - mission_no_hit_start_x))
+
+	if mission_progress >= mission_target:
+		# Mission completion bonus.
+		bonus_score += 500
+		info_label.text = "Mission complete! +500 | Space: Jump | Auto-run"
+
+func _mission_text() -> String:
+	var suffix: String = " (Complete)" if mission_progress >= mission_target else ""
+	match mission_type:
+		MissionType.COINS:
+			return "Mission: Collect %d coins (%d/%d)%s" % [mission_target, mission_progress, mission_target, suffix]
+		MissionType.SURVIVE_TIME:
+			return "Mission: Survive %ds (%d/%d)%s" % [mission_target, mission_progress, mission_target, suffix]
+		MissionType.NO_HIT_DISTANCE:
+			return "Mission: No-hit %dpx (%d/%d)%s" % [mission_target, mission_progress, mission_target, suffix]
+	return "Mission: --"
