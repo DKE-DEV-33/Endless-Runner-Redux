@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-0.7.0"
+const BUILD_VERSION: String = "build-0.8.0"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -18,10 +18,21 @@ const RIFT_DURATION: float = 6.0
 const MISSION_BONUS_BASE: int = 500
 const MAX_HEALTH: int = 5
 const COINS_PER_BONUS_HEART: int = 100
+const SECTION_LENGTH: float = 2300.0
+const ALT_ROUTE_VERTICAL_GAP_MIN: float = 72.0
+const SPEED_PICKUP_CHANCE: float = 0.05
 
 const LANE_Y: Array[float] = [448.0, 398.0, 352.0, 308.0]
+const SECTION_COLORS: Array[Color] = [
+	Color(0.03, 0.05, 0.09),
+	Color(0.05, 0.08, 0.14),
+	Color(0.08, 0.05, 0.12),
+	Color(0.06, 0.10, 0.10),
+	Color(0.09, 0.06, 0.08),
+]
 
-@onready var player: CharacterBody2D = $Player
+@onready var player: RunnerPlayer = $Player
+@onready var world_background: ColorRect = $WorldBackground
 @onready var score_label: Label = $CanvasLayer/ScoreLabel
 @onready var health_label: Label = $CanvasLayer/HealthLabel
 @onready var status_label: Label = $CanvasLayer/StatusLabel
@@ -45,6 +56,7 @@ var mission_completed: bool = false
 var mission_complete_until: float = 0.0
 var last_lane: int = START_LANE
 var run_seconds: float = 0.0
+var current_section: int = 0
 
 var rift_active: bool = false
 var rift_until: float = 0.0
@@ -58,6 +70,7 @@ var platforms: Array[Node2D] = []
 var coins: Array[Area2D] = []
 var hazards: Array[Area2D] = []
 var health_pickups: Array[Area2D] = []
+var speed_pickups: Array[Area2D] = []
 
 func _ready() -> void:
 	rng.randomize()
@@ -67,6 +80,7 @@ func _ready() -> void:
 	_build_static_opening()
 	_init_mission()
 	next_rift_at = rng.randf_range(RIFT_MIN_SECONDS, RIFT_MAX_SECONDS)
+	_apply_section_theme(0)
 	score_label.text = "Score: 0"
 	health_label.text = "Health: %d" % health
 	status_label.text = "Status: BOOTSTRAP"
@@ -80,6 +94,7 @@ func _process(delta: float) -> void:
 
 	run_seconds += delta
 	_update_rift_state()
+	_update_section_progression()
 
 	distance_score = int(player.global_position.x / 12.0)
 	score_label.text = "Score: %d" % (distance_score + bonus_score)
@@ -88,9 +103,9 @@ func _process(delta: float) -> void:
 		status_label.text = "Status: BOOTSTRAP"
 	else:
 		if rift_active:
-			status_label.text = "Status: RIFT SURGE"
+			status_label.text = "Status: RIFT SURGE | Pace %d" % player.get_pace_level()
 		else:
-			status_label.text = "Status: LIVE RUN"
+			status_label.text = "Status: LIVE RUN | Pace %d" % player.get_pace_level()
 		while next_spawn_x < player.global_position.x + PLAYER_AHEAD_SPAWN:
 			_spawn_segment()
 
@@ -135,7 +150,7 @@ func _spawn_segment() -> void:
 
 	_place_coins(next_spawn_x, y, segment_len, lane)
 	_place_hazards(next_spawn_x, y, segment_len, lane)
-	_maybe_place_health_pickup(next_spawn_x, y, segment_len, lane)
+	_maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane)
 	_maybe_spawn_alt_route(next_spawn_x, segment_len, lane)
 
 	var gap: float = _safe_gap_for_transition(last_lane, lane)
@@ -242,12 +257,11 @@ func _spawn_hazard_at(pos: Vector2) -> void:
 	hazards.append(hazard)
 	add_child(hazard)
 
-func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int) -> void:
+func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, chance: float = 0.18) -> void:
 	if lane > 2:
 		return
-	var chance: float = 0.045
 	if rift_active:
-		chance = 0.03
+		chance *= 0.8
 	if rng.randf() > chance:
 		return
 	var min_offset: float = minf(100.0, width * 0.35)
@@ -269,6 +283,9 @@ func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
 	if candidates.is_empty():
 		return
 	var alt_lane: int = candidates[rng.randi_range(0, candidates.size() - 1)]
+	var y_gap: float = absf(LANE_Y[alt_lane] - LANE_Y[lane])
+	if y_gap < ALT_ROUTE_VERTICAL_GAP_MIN:
+		return
 	var alt_width: float = clampf(width * rng.randf_range(0.48, 0.72), 170.0, 290.0)
 	var min_start: float = x + 70.0
 	var max_start: float = x + width - alt_width - 45.0
@@ -280,8 +297,24 @@ func _maybe_spawn_alt_route(x: float, width: float, lane: int) -> void:
 	platforms.append(alt_platform)
 	add_child(alt_platform)
 	_place_coins(alt_x, alt_y, alt_width, alt_lane)
-	if rng.randf() < 0.4:
-		_maybe_place_health_pickup(alt_x, alt_y, alt_width, alt_lane)
+	# Alt route is the risk/reward lane: always add some danger, then occasional heal.
+	if rng.randf() < 0.65:
+		_spawn_hazard_single(alt_x, alt_y, alt_width)
+	if rng.randf() < 0.35:
+		_maybe_place_health_pickup(alt_x, alt_y, alt_width, alt_lane, 0.75)
+
+func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int) -> void:
+	if lane > 2:
+		return
+	if rng.randf() > SPEED_PICKUP_CHANCE:
+		return
+	var min_offset: float = minf(90.0, width * 0.32)
+	var max_offset: float = maxf(min_offset + 8.0, width - 60.0)
+	var sx: float = x + rng.randf_range(min_offset, max_offset)
+	var sy: float = y - 66.0
+	var pickup: Area2D = _create_speed_pickup(Vector2(sx, sy))
+	speed_pickups.append(pickup)
+	add_child(pickup)
 
 func _create_coin(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
@@ -309,7 +342,7 @@ func _create_hazard(pos: Vector2) -> Area2D:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 14.0
+	circle.radius = 10.0
 	shape.shape = circle
 	area.add_child(shape)
 
@@ -321,6 +354,27 @@ func _create_hazard(pos: Vector2) -> Area2D:
 	area.add_child(sprite)
 
 	area.body_entered.connect(_on_hazard_body_entered)
+	return area
+
+func _create_speed_pickup(pos: Vector2) -> Area2D:
+	var area: Area2D = Area2D.new()
+	area.position = pos
+
+	var shape: CollisionShape2D = CollisionShape2D.new()
+	var circle: CircleShape2D = CircleShape2D.new()
+	circle.radius = 12.0
+	shape.shape = circle
+	area.add_child(shape)
+
+	var body_poly: Polygon2D = Polygon2D.new()
+	body_poly.polygon = PackedVector2Array([
+		Vector2(-10, 0), Vector2(-2, -10), Vector2(8, -10),
+		Vector2(2, 0), Vector2(10, 0), Vector2(0, 12), Vector2(-8, 12)
+	])
+	body_poly.color = Color(0.34, 0.76, 1.0)
+	area.add_child(body_poly)
+
+	area.body_entered.connect(_on_speed_pickup_body_entered.bind(area))
 	return area
 
 func _create_health_pickup(pos: Vector2) -> Area2D:
@@ -374,6 +428,15 @@ func _on_health_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 	health_pickups.erase(pickup)
 	pickup.queue_free()
 
+func _on_speed_pickup_body_entered(body: Node, pickup: Area2D) -> void:
+	if body != player:
+		return
+	var slow_amount: int = 2 if rng.randf() < 0.35 else 1
+	var pace_level: int = player.add_pace_levels(-slow_amount)
+	info_label.text = "Flux stabilizer collected: -%d pace (now %d)" % [slow_amount, pace_level]
+	speed_pickups.erase(pickup)
+	pickup.queue_free()
+
 func _cleanup_old() -> void:
 	var limit: float = player.global_position.x - DESPAWN_BEHIND
 
@@ -396,6 +459,11 @@ func _cleanup_old() -> void:
 		if hp.global_position.x < limit:
 			health_pickups.erase(hp)
 			hp.queue_free()
+
+	for sp: Area2D in speed_pickups.duplicate():
+		if sp.global_position.x < limit:
+			speed_pickups.erase(sp)
+			sp.queue_free()
 
 func _pick_reachable_lane(previous_lane: int) -> int:
 	var picked: int = rng.randi_range(maxi(0, previous_lane - 1), mini(LANE_Y.size() - 1, previous_lane + 1))
@@ -428,6 +496,23 @@ func _update_rift_state() -> void:
 	if run_seconds >= next_rift_at:
 		rift_active = true
 		rift_until = run_seconds + RIFT_DURATION
+
+func _update_section_progression() -> void:
+	if _bootstrap_active():
+		return
+	var next_section: int = maxi(0, int(player.global_position.x / SECTION_LENGTH))
+	if next_section <= current_section:
+		return
+	while current_section < next_section:
+		current_section += 1
+		_apply_section_theme(current_section)
+		_increment_pace_level(1, "Sector shift")
+
+func _apply_section_theme(section_index: int) -> void:
+	if SECTION_COLORS.is_empty():
+		return
+	var color_index: int = section_index % SECTION_COLORS.size()
+	world_background.color = SECTION_COLORS[color_index]
 
 func _init_mission() -> void:
 	mission_completed = false
@@ -463,7 +548,8 @@ func _update_mission_progress() -> void:
 		mission_complete_until = run_seconds + 2.0
 		var reward: int = MISSION_BONUS_BASE + ((mission_tier - 1) * 75)
 		bonus_score += reward
-		info_label.text = "Mission %d complete! +%d" % [mission_tier, reward]
+		_increment_pace_level(1, "Mission complete")
+		info_label.text = "Mission %d complete! +%d | Pace %d" % [mission_tier, reward, player.get_pace_level()]
 
 func _tick_mission_chain() -> void:
 	if not mission_completed:
@@ -487,3 +573,7 @@ func _mission_text() -> String:
 func _apply_health_delta(delta: int) -> void:
 	health = clampi(health + delta, 0, MAX_HEALTH)
 	health_label.text = "Health: %d" % health
+
+func _increment_pace_level(amount: int, reason: String) -> void:
+	var pace_level: int = player.add_pace_levels(amount)
+	info_label.text = "%s | Pace level: %d" % [reason, pace_level]
