@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.0"
+const BUILD_VERSION: String = "build-1.2.1"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -23,8 +23,8 @@ const ALT_ROUTE_VERTICAL_GAP_MIN: float = 104.0
 const ALT_ROUTE_EXTRA_LIFT: float = 88.0
 const ALT_ROUTE_MIN_WIDTH: float = 220.0
 const ALT_ROUTE_MAX_WIDTH: float = 340.0
-const BRANCH_CHAIN_CHANCE: float = 0.22
-const BRANCH_CHAIN_MAX: int = 2
+const BRANCH_CHAIN_CHANCE: float = 0.12
+const BRANCH_CHAIN_MAX: int = 1
 const BRANCH_MIN_WIDTH: float = 150.0
 const BRANCH_MAX_WIDTH: float = 280.0
 const SPEED_PICKUP_CHANCE: float = 0.025
@@ -407,6 +407,8 @@ func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, cha
 	return true
 
 func _spawn_branch_routes(x: float, width: float, base_lane: int) -> void:
+	if width < 320.0:
+		return
 	var spawn_branches: bool = false
 	if branch_chain_remaining > 0:
 		spawn_branches = true
@@ -424,7 +426,7 @@ func _spawn_branch_routes(x: float, width: float, base_lane: int) -> void:
 		return
 
 	# About half the time, intentionally skip one branch lane to create stronger divergence.
-	if branch_lanes.size() > 1 and rng.randf() < 0.52:
+	if branch_lanes.size() > 1 and rng.randf() < 0.80:
 		branch_lanes = [branch_lanes[rng.randi_range(0, branch_lanes.size() - 1)]]
 
 	for lane_idx: int in branch_lanes:
@@ -436,8 +438,8 @@ func _spawn_single_branch_platform(x: float, width: float, base_lane: int, targe
 		return
 
 	var alt_width: float = clampf(width * rng.randf_range(0.48, 0.72), BRANCH_MIN_WIDTH, BRANCH_MAX_WIDTH)
-	var min_start: float = x + 48.0
-	var max_start: float = x + width - alt_width - 22.0
+	var min_start: float = x + 96.0
+	var max_start: float = x + width - alt_width - 64.0
 	if max_start <= min_start:
 		return
 
@@ -693,10 +695,10 @@ func _safe_gap_for_transition(from_lane: int, to_lane: int) -> float:
 
 	var delta: int = to_lane - from_lane
 	if delta >= 1:
-		return rng.randf_range(72.0 + (tier_bonus * 0.5), 108.0 + tier_bonus)
+		return rng.randf_range(90.0 + (tier_bonus * 0.5), 128.0 + tier_bonus)
 	if delta <= -1:
-		return rng.randf_range(86.0 + (tier_bonus * 0.6), 138.0 + tier_bonus)
-	return rng.randf_range(98.0 + (tier_bonus * 0.7), 152.0 + (tier_bonus * 1.2))
+		return rng.randf_range(104.0 + (tier_bonus * 0.6), 160.0 + tier_bonus)
+	return rng.randf_range(116.0 + (tier_bonus * 0.7), 174.0 + (tier_bonus * 1.2))
 
 func _bootstrap_active() -> bool:
 	return player.global_position.x < bootstrap_release_x
