@@ -1,12 +1,12 @@
 extends Node2D
-const BUILD_VERSION: String = "build-0.6.0"
+const BUILD_VERSION: String = "build-0.6.1"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
 const DESPAWN_BEHIND: float = 500.0
 
-const MIN_SEGMENT: float = 230.0
-const MAX_SEGMENT: float = 440.0
+const MIN_SEGMENT: float = 260.0
+const MAX_SEGMENT: float = 520.0
 
 const START_PLATFORM_X: float = -260.0
 const START_PLATFORM_LENGTH: float = 1100.0
@@ -120,7 +120,7 @@ func _spawn_fixed_platform(start_x: float, lane: int, width: float, gap_after: f
 	return start_x + width + gap_after
 
 func _spawn_segment() -> void:
-	var segment_len: float = rng.randf_range(MIN_SEGMENT, MAX_SEGMENT)
+	var segment_len: float = _pick_segment_length()
 	var lane: int = _pick_reachable_lane(last_lane)
 	var y: float = LANE_Y[lane]
 
@@ -134,6 +134,12 @@ func _spawn_segment() -> void:
 	var gap: float = _safe_gap_for_transition(last_lane, lane)
 	next_spawn_x += segment_len + gap
 	last_lane = lane
+
+func _pick_segment_length() -> float:
+	# Slightly longer segments over time create a steadier rhythm while still increasing challenge.
+	var tier_scale: float = clampf(float(mission_tier - 1) * 0.04, 0.0, 0.16)
+	var min_len: float = MIN_SEGMENT + (MAX_SEGMENT - MIN_SEGMENT) * tier_scale
+	return rng.randf_range(min_len, MAX_SEGMENT)
 
 func _create_platform(x: float, y: float, width: float) -> StaticBody2D:
 	var body: StaticBody2D = StaticBody2D.new()
@@ -310,12 +316,16 @@ func _pick_reachable_lane(previous_lane: int) -> int:
 	return picked
 
 func _safe_gap_for_transition(from_lane: int, to_lane: int) -> float:
+	var tier_bonus: float = clampf(float(mission_tier - 1) * 2.0, 0.0, 18.0)
+	if rift_active:
+		tier_bonus += 8.0
+
 	var delta: int = to_lane - from_lane
 	if delta >= 1:
-		return rng.randf_range(78.0, 118.0)
+		return rng.randf_range(72.0 + (tier_bonus * 0.5), 108.0 + tier_bonus)
 	if delta <= -1:
-		return rng.randf_range(94.0, 150.0)
-	return rng.randf_range(102.0, 142.0)
+		return rng.randf_range(86.0 + (tier_bonus * 0.6), 138.0 + tier_bonus)
+	return rng.randf_range(98.0 + (tier_bonus * 0.7), 152.0 + (tier_bonus * 1.2))
 
 func _bootstrap_active() -> bool:
 	return player.global_position.x < bootstrap_release_x
