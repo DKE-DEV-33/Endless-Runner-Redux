@@ -63,6 +63,8 @@ color = Color(0.03, 0.05, 0.09, 1)
 
 [node name="ParallaxDecor" type="Node2D" parent="."]
 
+[node name="LaneGuides" type="Node2D" parent="."]
+
 [node name="Player" type="CharacterBody2D" parent="."]
 position = Vector2(140, 420)
 script = ExtResource("2")
@@ -135,7 +137,7 @@ offset_left = 28.0
 offset_top = 662.0
 offset_right = 500.0
 offset_bottom = 690.0
-text = "Version: build-1.2.4"
+text = "Version: build-1.2.5"
 label_settings = SubResource("3")
 
 [node name="PauseLayer" type="CanvasLayer" parent="."]

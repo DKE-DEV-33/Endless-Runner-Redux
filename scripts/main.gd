@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.4"
+const BUILD_VERSION: String = "build-1.2.5"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -45,6 +45,9 @@ const DROP_THROUGH_SUPPRESS_SEGMENTS: int = 2
 const DROP_THROUGH_PITY_SEGMENTS: int = 6
 const BRANCH_DROP_THROUGH_CHANCE_MID: float = 0.22
 const BRANCH_DROP_THROUGH_CHANCE_TOP: float = 0.30
+const LANE_GUIDE_LENGTH: float = 5600.0
+const LANE_GUIDE_AHEAD: float = 1900.0
+const LANE_GUIDE_BEHIND: float = 700.0
 
 const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
@@ -58,6 +61,7 @@ const SECTION_COLORS: Array[Color] = [
 @onready var player = $Player
 @onready var world_background: ColorRect = $WorldBackground
 @onready var parallax_decor: Node2D = $ParallaxDecor
+@onready var lane_guides_root: Node2D = $LaneGuides
 @onready var score_label: Label = $CanvasLayer/ScoreLabel
 @onready var health_label: Label = $CanvasLayer/HealthLabel
 @onready var status_label: Label = $CanvasLayer/StatusLabel
@@ -118,6 +122,7 @@ var speed_pickups: Array[Area2D] = []
 var branch_chain_remaining: int = 0
 var parallax_layers: Array[Dictionary] = []
 var segments_since_drop_through: int = 0
+var lane_guides: Array[Dictionary] = []
 
 func _ready() -> void:
 	_setup_run_mode_and_seed()
@@ -127,6 +132,7 @@ func _ready() -> void:
 	player.jump_triggered.connect(_on_player_jump_triggered)
 	mission_no_hit_start_x = player.global_position.x
 	_build_static_opening()
+	_build_lane_guides()
 	_build_parallax_layers()
 	_init_mission()
 	_prewarm_post_bootstrap_route()
@@ -160,6 +166,7 @@ func _process(delta: float) -> void:
 	_update_rift_state()
 	_update_section_progression()
 	_update_parallax_layers()
+	_update_lane_guides()
 	_refresh_info_label()
 
 	distance_score = int(player.global_position.x / 12.0)
@@ -833,6 +840,7 @@ func _apply_section_theme(section_index: int) -> void:
 	var color_index: int = section_index % SECTION_COLORS.size()
 	world_background.color = SECTION_COLORS[color_index]
 	_tint_parallax_layers(SECTION_COLORS[color_index])
+	_tint_lane_guides(SECTION_COLORS[color_index])
 
 func _init_mission() -> void:
 	mission_completed = false
@@ -1070,6 +1078,75 @@ func _create_tone_stream(frequency: float, duration: float) -> AudioStreamWAV:
 	wav.stereo = false
 	wav.data = data
 	return wav
+
+func _build_lane_guides() -> void:
+	lane_guides.clear()
+	for child: Node in lane_guides_root.get_children():
+		child.queue_free()
+
+	for lane_idx: int in range(LANE_Y.size()):
+		var lane_node: Node2D = Node2D.new()
+		lane_guides_root.add_child(lane_node)
+
+		var guide_band: Polygon2D = Polygon2D.new()
+		guide_band.polygon = PackedVector2Array([
+			Vector2(-LANE_GUIDE_LENGTH * 0.5, -12.0),
+			Vector2(LANE_GUIDE_LENGTH * 0.5, -12.0),
+			Vector2(LANE_GUIDE_LENGTH * 0.5, 12.0),
+			Vector2(-LANE_GUIDE_LENGTH * 0.5, 12.0),
+		])
+		guide_band.color = _lane_guide_color(lane_idx)
+		lane_node.add_child(guide_band)
+
+		var edge_line: Polygon2D = Polygon2D.new()
+		edge_line.polygon = PackedVector2Array([
+			Vector2(-LANE_GUIDE_LENGTH * 0.5, -10.0),
+			Vector2(LANE_GUIDE_LENGTH * 0.5, -10.0),
+			Vector2(LANE_GUIDE_LENGTH * 0.5, -7.0),
+			Vector2(-LANE_GUIDE_LENGTH * 0.5, -7.0),
+		])
+		edge_line.color = _lane_guide_color(lane_idx).lightened(0.25)
+		lane_node.add_child(edge_line)
+
+		lane_guides.append({"node": lane_node, "lane": lane_idx})
+
+func _lane_guide_color(lane_idx: int) -> Color:
+	match lane_idx:
+		0:
+			return Color(0.28, 0.34, 0.42, 0.28)
+		1:
+			return Color(0.17, 0.47, 0.62, 0.24)
+		2:
+			return Color(0.40, 0.28, 0.56, 0.24)
+	return Color(0.32, 0.36, 0.44, 0.24)
+
+func _update_lane_guides() -> void:
+	if lane_guides.is_empty():
+		return
+	var anchor_x: float = player.global_position.x + ((LANE_GUIDE_AHEAD - LANE_GUIDE_BEHIND) * 0.5)
+	for lane_info: Dictionary in lane_guides:
+		var lane_node: Node2D = lane_info["node"]
+		var lane_idx: int = int(lane_info["lane"])
+		lane_node.position = Vector2(anchor_x, LANE_Y[lane_idx] + 8.0)
+
+func _tint_lane_guides(section_color: Color) -> void:
+	if lane_guides.is_empty():
+		return
+	for lane_info: Dictionary in lane_guides:
+		var lane_node: Node2D = lane_info["node"]
+		var lane_idx: int = int(lane_info["lane"])
+		var base: Color = _lane_guide_color(lane_idx)
+		var mixed: Color = Color(
+			clampf((base.r * 0.62) + (section_color.r * 0.38), 0.0, 1.0),
+			clampf((base.g * 0.62) + (section_color.g * 0.38), 0.0, 1.0),
+			clampf((base.b * 0.62) + (section_color.b * 0.38), 0.0, 1.0),
+			base.a
+		)
+		var highlight: Color = mixed.lightened(0.20)
+		if lane_node.get_child_count() > 0 and lane_node.get_child(0) is Polygon2D:
+			(lane_node.get_child(0) as Polygon2D).color = mixed
+		if lane_node.get_child_count() > 1 and lane_node.get_child(1) is Polygon2D:
+			(lane_node.get_child(1) as Polygon2D).color = highlight
 
 func _build_parallax_layers() -> void:
 	parallax_layers.clear()
