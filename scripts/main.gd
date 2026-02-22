@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.7"
+const BUILD_VERSION: String = "build-1.2.8"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -167,6 +167,7 @@ func _process(delta: float) -> void:
 	_update_section_progression()
 	_update_parallax_layers()
 	_update_lane_guides()
+	_animate_runtime_visuals()
 	_refresh_info_label()
 
 	distance_score = int(player.global_position.x / 12.0)
@@ -595,6 +596,7 @@ func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int, over
 func _create_coin(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
 	area.position = pos
+	area.set_meta("base_y", pos.y)
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
@@ -607,7 +609,16 @@ func _create_coin(pos: Vector2) -> Area2D:
 		Vector2(-10, 0), Vector2(0, -10), Vector2(10, 0), Vector2(0, 10)
 	])
 	sprite.color = Color(1.0, 0.88, 0.30)
+	sprite.set_meta("is_coin_core", true)
 	area.add_child(sprite)
+
+	var ring: Polygon2D = Polygon2D.new()
+	ring.polygon = PackedVector2Array([
+		Vector2(-12, 0), Vector2(0, -12), Vector2(12, 0), Vector2(0, 12)
+	])
+	ring.color = Color(1.0, 0.98, 0.64, 0.34)
+	ring.set_meta("is_coin_ring", true)
+	area.add_child(ring)
 
 	area.body_entered.connect(_on_coin_body_entered.bind(area))
 	return area
@@ -615,6 +626,7 @@ func _create_coin(pos: Vector2) -> Area2D:
 func _create_big_coin(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
 	area.position = pos
+	area.set_meta("base_y", pos.y)
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
@@ -627,7 +639,16 @@ func _create_big_coin(pos: Vector2) -> Area2D:
 		Vector2(-14, 0), Vector2(0, -14), Vector2(14, 0), Vector2(0, 14)
 	])
 	sprite.color = Color(1.0, 0.65, 0.12)
+	sprite.set_meta("is_big_coin_core", true)
 	area.add_child(sprite)
+
+	var ring: Polygon2D = Polygon2D.new()
+	ring.polygon = PackedVector2Array([
+		Vector2(-18, 0), Vector2(0, -18), Vector2(18, 0), Vector2(0, 18)
+	])
+	ring.color = Color(1.0, 0.82, 0.42, 0.42)
+	ring.set_meta("is_big_coin_ring", true)
+	area.add_child(ring)
 
 	area.body_entered.connect(_on_big_coin_body_entered.bind(area))
 	return area
@@ -642,12 +663,28 @@ func _create_hazard(pos: Vector2) -> Area2D:
 	shape.shape = circle
 	area.add_child(shape)
 
-	var sprite: Polygon2D = Polygon2D.new()
-	sprite.polygon = PackedVector2Array([
-		Vector2(-12, 12), Vector2(0, -14), Vector2(12, 12)
+	var base: Polygon2D = Polygon2D.new()
+	base.polygon = PackedVector2Array([
+		Vector2(-14, 11), Vector2(14, 11), Vector2(10, 16), Vector2(-10, 16)
 	])
-	sprite.color = Color(0.95, 0.35, 0.25)
-	area.add_child(sprite)
+	base.color = Color(0.18, 0.15, 0.14)
+	area.add_child(base)
+
+	var flame_outer: Polygon2D = Polygon2D.new()
+	flame_outer.polygon = PackedVector2Array([
+		Vector2(-12, 12), Vector2(-4, -2), Vector2(0, -18), Vector2(5, -2), Vector2(12, 12)
+	])
+	flame_outer.color = Color(0.96, 0.35, 0.22)
+	flame_outer.set_meta("is_flame_outer", true)
+	area.add_child(flame_outer)
+
+	var flame_inner: Polygon2D = Polygon2D.new()
+	flame_inner.polygon = PackedVector2Array([
+		Vector2(-6, 10), Vector2(-2, 0), Vector2(0, -10), Vector2(3, 0), Vector2(6, 10)
+	])
+	flame_inner.color = Color(1.0, 0.80, 0.34)
+	flame_inner.set_meta("is_flame_inner", true)
+	area.add_child(flame_inner)
 
 	area.body_entered.connect(_on_hazard_body_entered)
 	return area
@@ -789,6 +826,36 @@ func _cleanup_old() -> void:
 		if sp.global_position.x < limit:
 			speed_pickups.erase(sp)
 			sp.queue_free()
+
+func _animate_runtime_visuals() -> void:
+	var phase: float = run_seconds * 5.8
+
+	for coin: Area2D in coins:
+		if not is_instance_valid(coin):
+			continue
+		coin.rotation = sin(phase + coin.global_position.x * 0.013) * 0.18
+		var coin_base_y: float = float(coin.get_meta("base_y", coin.position.y))
+		coin.position.y = coin_base_y + (sin((phase * 1.6) + coin.global_position.x * 0.011) * 4.0)
+
+	for big_coin: Area2D in big_coins:
+		if not is_instance_valid(big_coin):
+			continue
+		big_coin.rotation = sin((phase * 0.9) + big_coin.global_position.x * 0.008) * 0.22
+		var big_base_y: float = float(big_coin.get_meta("base_y", big_coin.position.y))
+		big_coin.position.y = big_base_y + (sin((phase * 1.2) + big_coin.global_position.x * 0.009) * 5.0)
+		big_coin.scale = Vector2.ONE * (1.0 + (sin(phase + big_coin.global_position.x * 0.006) * 0.04))
+
+	for hazard: Area2D in hazards:
+		if not is_instance_valid(hazard):
+			continue
+		var flicker: float = 1.0 + (sin((phase * 1.8) + hazard.global_position.x * 0.02) * 0.08)
+		for node: Node in hazard.get_children():
+			if node is Polygon2D:
+				var poly: Polygon2D = node
+				if bool(poly.get_meta("is_flame_outer", false)):
+					poly.scale = Vector2(flicker, 1.0 + (flicker - 1.0) * 1.7)
+				elif bool(poly.get_meta("is_flame_inner", false)):
+					poly.scale = Vector2(flicker * 0.95, 1.0 + (flicker - 1.0) * 2.0)
 
 func _pick_reachable_lane(previous_lane: int) -> int:
 	var picked: int = rng.randi_range(maxi(0, previous_lane - 1), mini(LANE_Y.size() - 1, previous_lane + 1))

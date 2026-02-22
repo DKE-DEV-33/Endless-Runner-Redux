@@ -98,7 +98,24 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 func _draw() -> void:
-	draw_rect(Rect2(-18, -26, 36, 52), Color(0.50, 0.95, 0.72), true)
+	var t: float = Time.get_ticks_msec() * 0.001
+	var stride: float = sin(t * 14.0 + global_position.x * 0.01)
+	var bob: float = sin(t * 10.0 + global_position.x * 0.008) * 1.2
+
+	# Body shell (sci-fi/medieval mix).
+	draw_rect(Rect2(-14, -24 + bob, 28, 36), Color(0.25, 0.86, 0.68), true)
+	draw_rect(Rect2(-12, -22 + bob, 24, 9), Color(0.62, 0.98, 0.86), true)
+	draw_rect(Rect2(-6, -19 + bob, 12, 3), Color(0.09, 0.24, 0.33), true) # visor
+
+	# Shoulder/cape accent.
+	draw_rect(Rect2(-16, -12 + bob, 32, 8), Color(0.11, 0.22, 0.37, 0.86), true)
+
+	# Legs with simple stride animation.
+	draw_rect(Rect2(-11, 12 + bob, 8, 14 + (stride * 1.8)), Color(0.15, 0.34, 0.47), true)
+	draw_rect(Rect2(3, 12 + bob, 8, 14 - (stride * 1.8)), Color(0.15, 0.34, 0.47), true)
+
+	# Core glow.
+	draw_rect(Rect2(-4, -7 + bob, 8, 8), Color(0.90, 0.99, 0.98, 0.86), true)
 
 func _process(_delta: float) -> void:
 	queue_redraw()
