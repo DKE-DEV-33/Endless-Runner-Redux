@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.6"
+const BUILD_VERSION: String = "build-1.2.7"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -48,8 +48,6 @@ const BRANCH_DROP_THROUGH_CHANCE_TOP: float = 0.30
 const LANE_GUIDE_LENGTH: float = 5600.0
 const LANE_GUIDE_AHEAD: float = 1900.0
 const LANE_GUIDE_BEHIND: float = 700.0
-const HAZARD_TELEGRAPH_LOOKAHEAD: float = 86.0
-const BRANCH_ENTRY_CUE_OFFSET: float = 34.0
 
 const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
@@ -125,7 +123,6 @@ var branch_chain_remaining: int = 0
 var parallax_layers: Array[Dictionary] = []
 var segments_since_drop_through: int = 0
 var lane_guides: Array[Dictionary] = []
-var telegraphs: Array[Node2D] = []
 
 func _ready() -> void:
 	_setup_run_mode_and_seed()
@@ -459,7 +456,6 @@ func _spawn_hazard_single(x: float, y: float, width: float) -> void:
 		return
 	var hx: float = x + clampf(width * rng.randf_range(0.40, 0.70), 82.0, width - 82.0)
 	_spawn_hazard_at(Vector2(hx, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
-	_spawn_hazard_telegraph(hx - HAZARD_TELEGRAPH_LOOKAHEAD, y)
 
 func _spawn_hazard_pair(x: float, y: float, width: float) -> void:
 	if width < 290.0:
@@ -469,7 +465,6 @@ func _spawn_hazard_pair(x: float, y: float, width: float) -> void:
 	var second_x: float = x + clampf(width * rng.randf_range(0.62, 0.74), 160.0, width - 80.0)
 	_spawn_hazard_at(Vector2(first_x, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
 	_spawn_hazard_at(Vector2(second_x, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
-	_spawn_hazard_telegraph(((first_x + second_x) * 0.5) - HAZARD_TELEGRAPH_LOOKAHEAD, y)
 
 func _spawn_hazard_gate(x: float, y: float, width: float) -> void:
 	if width < 330.0:
@@ -478,17 +473,11 @@ func _spawn_hazard_gate(x: float, y: float, width: float) -> void:
 	var center: float = x + clampf(width * rng.randf_range(0.55, 0.72), 160.0, width - 160.0)
 	_spawn_hazard_at(Vector2(center - 38.0, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
 	_spawn_hazard_at(Vector2(center + 38.0, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
-	_spawn_hazard_telegraph(center - HAZARD_TELEGRAPH_LOOKAHEAD, y)
 
 func _spawn_hazard_at(pos: Vector2) -> void:
 	var hazard: Area2D = _create_hazard(pos)
 	hazards.append(hazard)
 	add_child(hazard)
-
-func _spawn_hazard_telegraph(x: float, lane_y: float) -> void:
-	var marker: Node2D = _create_hazard_telegraph(Vector2(x, lane_y - 30.0))
-	telegraphs.append(marker)
-	add_child(marker)
 
 func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, chance: float = 0.18) -> bool:
 	if lane > 2:
@@ -572,7 +561,6 @@ func _spawn_single_branch_platform(x: float, width: float, base_lane: int, targe
 	var branch_platform: StaticBody2D = _create_platform(alt_x, target_y, alt_width, platform_type)
 	platforms.append(branch_platform)
 	add_child(branch_platform)
-	_spawn_branch_entry_telegraph(alt_x - BRANCH_ENTRY_CUE_OFFSET, base_lane, target_lane)
 
 	_place_coins(alt_x, target_y, alt_width, target_lane)
 	_maybe_place_big_coin(alt_x, target_y, alt_width, target_lane, 0.30 + (0.08 * float(lane_delta - 1)))
@@ -663,55 +651,6 @@ func _create_hazard(pos: Vector2) -> Area2D:
 
 	area.body_entered.connect(_on_hazard_body_entered)
 	return area
-
-func _create_hazard_telegraph(pos: Vector2) -> Node2D:
-	var marker: Node2D = Node2D.new()
-	marker.position = pos
-
-	var plate: Polygon2D = Polygon2D.new()
-	plate.polygon = PackedVector2Array([
-		Vector2(-12.0, -8.0), Vector2(12.0, -8.0), Vector2(12.0, 8.0), Vector2(-12.0, 8.0)
-	])
-	plate.color = Color(1.0, 0.63, 0.21, 0.55)
-	marker.add_child(plate)
-
-	var pulse: Polygon2D = Polygon2D.new()
-	pulse.polygon = PackedVector2Array([
-		Vector2(-8.0, -6.0), Vector2(0.0, -13.0), Vector2(8.0, -6.0),
-		Vector2(0.0, 6.0)
-	])
-	pulse.color = Color(1.0, 0.83, 0.38, 0.78)
-	marker.add_child(pulse)
-
-	return marker
-
-func _spawn_branch_entry_telegraph(entry_x: float, base_lane: int, target_lane: int) -> void:
-	var source: Node2D = _create_branch_telegraph(Vector2(entry_x, LANE_Y[base_lane] - 28.0), _lane_guide_color(base_lane).lightened(0.24))
-	var target: Node2D = _create_branch_telegraph(Vector2(entry_x + 18.0, LANE_Y[target_lane] - 28.0), _lane_guide_color(target_lane).lightened(0.36))
-	telegraphs.append(source)
-	telegraphs.append(target)
-	add_child(source)
-	add_child(target)
-
-func _create_branch_telegraph(pos: Vector2, color: Color) -> Node2D:
-	var marker: Node2D = Node2D.new()
-	marker.position = pos
-
-	var diamond: Polygon2D = Polygon2D.new()
-	diamond.polygon = PackedVector2Array([
-		Vector2(-10.0, 0.0), Vector2(0.0, -10.0), Vector2(10.0, 0.0), Vector2(0.0, 10.0)
-	])
-	diamond.color = Color(color.r, color.g, color.b, 0.64)
-	marker.add_child(diamond)
-
-	var core: Polygon2D = Polygon2D.new()
-	core.polygon = PackedVector2Array([
-		Vector2(-4.0, 0.0), Vector2(0.0, -4.0), Vector2(4.0, 0.0), Vector2(0.0, 4.0)
-	])
-	core.color = Color(0.92, 0.98, 1.0, 0.82)
-	marker.add_child(core)
-
-	return marker
 
 func _create_speed_pickup(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
@@ -850,11 +789,6 @@ func _cleanup_old() -> void:
 		if sp.global_position.x < limit:
 			speed_pickups.erase(sp)
 			sp.queue_free()
-
-	for marker: Node2D in telegraphs.duplicate():
-		if marker.global_position.x < limit - 40.0:
-			telegraphs.erase(marker)
-			marker.queue_free()
 
 func _pick_reachable_lane(previous_lane: int) -> int:
 	var picked: int = rng.randi_range(maxi(0, previous_lane - 1), mini(LANE_Y.size() - 1, previous_lane + 1))
