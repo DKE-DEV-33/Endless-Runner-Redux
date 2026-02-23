@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.17"
+const BUILD_VERSION: String = "build-1.2.18"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -56,6 +56,8 @@ const PLATFORM_RIVET_GAP: float = 46.0
 const ATMOS_STAR_COUNT: int = 90
 const ATMOS_EMBER_COUNT: int = 54
 const ATMOS_SPIRE_COUNT: int = 18
+const ATMOS_SMOG_COUNT: int = 8
+const BACKGROUND_ART_PATH: String = "res://assets/images/Background_image.png"
 
 const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
@@ -70,11 +72,7 @@ const BIOMES: Array[Dictionary] = [
 	{"name": "Rift Span", "hazard_mult": 1.18, "coin_bonus": 0},
 	{"name": "Ember Vault", "hazard_mult": 1.06, "coin_bonus": 2},
 ]
-const BIOME_MUSIC_PATHS: Array[String] = [
-	"res://assets/audio/foundry_rim.wav",
-	"res://assets/audio/rift_span.wav",
-	"res://assets/audio/ember_vault.wav",
-]
+const GAMEPLAY_MUSIC_PATH: String = "res://assets/audio/gameplay_music.mp3"
 
 @onready var player = $Player
 @onready var world_background: ColorRect = $WorldBackground
@@ -147,6 +145,7 @@ var parallax_layers: Array[Dictionary] = []
 var atmosphere_stars: Array[Dictionary] = []
 var atmosphere_embers: Array[Dictionary] = []
 var atmosphere_spires: Array[Dictionary] = []
+var atmosphere_smog: Array[Dictionary] = []
 var segments_since_drop_through: int = 0
 var lane_guides: Array[Dictionary] = []
 
@@ -1059,14 +1058,12 @@ func _current_biome() -> Dictionary:
 func _setup_biome_music() -> void:
 	music_player.name = "BiomeMusic"
 	music_player.bus = "Master"
-	music_player.volume_db = -7.0
+	music_player.volume_db = -10.0
 	add_child(music_player)
 	_update_biome_music()
 
 func _update_biome_music() -> void:
-	if current_biome_index < 0 or current_biome_index >= BIOME_MUSIC_PATHS.size():
-		return
-	var path: String = BIOME_MUSIC_PATHS[current_biome_index]
+	var path: String = GAMEPLAY_MUSIC_PATH
 	if not ResourceLoader.exists(path):
 		return
 	var stream: AudioStream = load(path)
@@ -1076,6 +1073,8 @@ func _update_biome_music() -> void:
 		(stream as AudioStreamOggVorbis).loop = true
 	elif stream is AudioStreamWAV:
 		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	elif stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = true
 	if music_player.stream == stream and music_player.playing:
 		return
 	music_player.stream = stream
@@ -1348,8 +1347,27 @@ func _build_atmosphere_decor() -> void:
 	atmosphere_stars.clear()
 	atmosphere_embers.clear()
 	atmosphere_spires.clear()
+	atmosphere_smog.clear()
 	for child: Node in atmosphere_decor.get_children():
 		child.queue_free()
+
+	if ResourceLoader.exists(BACKGROUND_ART_PATH):
+		var bg_tex: Texture2D = load(BACKGROUND_ART_PATH)
+		if bg_tex != null:
+			for i: int in 2:
+				var bg: Sprite2D = Sprite2D.new()
+				bg.texture = bg_tex
+				bg.centered = true
+				bg.modulate = Color(0.58, 0.72, 0.88, 0.26)
+				bg.scale = Vector2(2.2, 2.2)
+				var bx: float = -1200.0 + (i * 2800.0)
+				var by: float = 200.0
+				bg.position = Vector2(bx, by)
+				bg.set_meta("base_x", bx)
+				bg.set_meta("base_y", by)
+				bg.set_meta("parallax", 0.06)
+				atmosphere_decor.add_child(bg)
+				atmosphere_spires.append({"node": bg, "is_texture": true})
 
 	for i: int in ATMOS_SPIRE_COUNT:
 		var spire: Polygon2D = Polygon2D.new()
@@ -1358,7 +1376,7 @@ func _build_atmosphere_decor() -> void:
 		spire.polygon = PackedVector2Array([
 			Vector2(-width * 0.5, 0.0), Vector2(width * 0.5, 0.0), Vector2(width * 0.18, -height), Vector2(-width * 0.22, -height * 0.78)
 		])
-		spire.color = Color(0.09, 0.13, 0.20, 0.32)
+		spire.color = Color(0.08, 0.12, 0.19, 0.42)
 		var px: float = rng.randf_range(-2400.0, 20000.0)
 		var py: float = rng.randf_range(500.0, 680.0)
 		spire.position = Vector2(px, py)
@@ -1367,6 +1385,24 @@ func _build_atmosphere_decor() -> void:
 		spire.set_meta("parallax", rng.randf_range(0.10, 0.18))
 		atmosphere_decor.add_child(spire)
 		atmosphere_spires.append({"node": spire})
+
+	for i: int in ATMOS_SMOG_COUNT:
+		var smog: Polygon2D = Polygon2D.new()
+		var w: float = rng.randf_range(1200.0, 2600.0)
+		var h: float = rng.randf_range(160.0, 320.0)
+		smog.polygon = PackedVector2Array([
+			Vector2(-w * 0.5, -h * 0.3), Vector2(w * 0.5, -h * 0.45), Vector2(w * 0.5, h * 0.55), Vector2(-w * 0.5, h * 0.4)
+		])
+		smog.color = Color(0.32, 0.38, 0.46, 0.17)
+		var sx: float = rng.randf_range(-2600.0, 21000.0)
+		var sy: float = rng.randf_range(20.0, 420.0)
+		smog.position = Vector2(sx, sy)
+		smog.set_meta("base_x", sx)
+		smog.set_meta("base_y", sy)
+		smog.set_meta("parallax", rng.randf_range(0.08, 0.18))
+		smog.set_meta("drift", rng.randf_range(0.4, 1.0))
+		atmosphere_decor.add_child(smog)
+		atmosphere_smog.append({"node": smog})
 
 	for i: int in ATMOS_STAR_COUNT:
 		var star: Polygon2D = Polygon2D.new()
@@ -1405,14 +1441,25 @@ func _build_atmosphere_decor() -> void:
 func _update_atmosphere_decor() -> void:
 	var px: float = player.global_position.x
 	for entry: Dictionary in atmosphere_spires:
-		var spire: Polygon2D = entry["node"]
-		if not is_instance_valid(spire):
+		var node: Node2D = entry["node"]
+		if not is_instance_valid(node):
 			continue
-		var bx: float = float(spire.get_meta("base_x", spire.position.x))
-		var by: float = float(spire.get_meta("base_y", spire.position.y))
-		var parallax: float = float(spire.get_meta("parallax", 0.12))
-		spire.position.x = bx + (px * parallax)
-		spire.position.y = by
+		var bx: float = float(node.get_meta("base_x", node.position.x))
+		var by: float = float(node.get_meta("base_y", node.position.y))
+		var parallax: float = float(node.get_meta("parallax", 0.12))
+		node.position.x = bx + (px * parallax)
+		node.position.y = by
+
+	for entry: Dictionary in atmosphere_smog:
+		var smog: Polygon2D = entry["node"]
+		if not is_instance_valid(smog):
+			continue
+		var bx: float = float(smog.get_meta("base_x", smog.position.x))
+		var by: float = float(smog.get_meta("base_y", smog.position.y))
+		var parallax: float = float(smog.get_meta("parallax", 0.12))
+		var drift: float = float(smog.get_meta("drift", 0.7))
+		smog.position.x = bx + (px * parallax) + (sin(run_seconds * drift + bx * 0.0008) * 12.0)
+		smog.position.y = by + (sin(run_seconds * drift * 0.6 + by * 0.008) * 7.0)
 
 	for entry: Dictionary in atmosphere_stars:
 		var star: Polygon2D = entry["node"]
@@ -1440,13 +1487,24 @@ func _update_atmosphere_decor() -> void:
 
 func _tint_atmosphere_decor(section_color: Color) -> void:
 	for entry: Dictionary in atmosphere_spires:
-		var spire: Polygon2D = entry["node"]
-		if is_instance_valid(spire):
+		var node: Node2D = entry["node"]
+		if not is_instance_valid(node):
+			continue
+		if node is Polygon2D:
+			var spire: Polygon2D = node
 			spire.color = Color(
-				clampf(0.06 + section_color.r * 0.26, 0.0, 1.0),
-				clampf(0.09 + section_color.g * 0.30, 0.0, 1.0),
-				clampf(0.14 + section_color.b * 0.34, 0.0, 1.0),
-				0.34
+				clampf(0.04 + section_color.r * 0.30, 0.0, 1.0),
+				clampf(0.07 + section_color.g * 0.34, 0.0, 1.0),
+				clampf(0.12 + section_color.b * 0.38, 0.0, 1.0),
+				0.42
+			)
+		elif node is Sprite2D:
+			var bg_sprite: Sprite2D = node
+			bg_sprite.modulate = Color(
+				clampf(0.42 + section_color.r * 0.52, 0.0, 1.0),
+				clampf(0.48 + section_color.g * 0.48, 0.0, 1.0),
+				clampf(0.56 + section_color.b * 0.56, 0.0, 1.0),
+				0.30
 			)
 
 	var ember_tint: Color = Color(1.0, 0.58, 0.25, 0.42)
@@ -1458,6 +1516,16 @@ func _tint_atmosphere_decor(section_color: Color) -> void:
 		var ember: Polygon2D = entry["node"]
 		if is_instance_valid(ember):
 			ember.color = ember_tint
+
+	var fog_tint: Color = Color(0.28, 0.34, 0.44, 0.16)
+	if current_biome_index == 1:
+		fog_tint = Color(0.22, 0.33, 0.52, 0.20)
+	elif current_biome_index == 2:
+		fog_tint = Color(0.42, 0.28, 0.24, 0.20)
+	for entry: Dictionary in atmosphere_smog:
+		var smog: Polygon2D = entry["node"]
+		if is_instance_valid(smog):
+			smog.color = fog_tint
 
 func _build_lane_guides() -> void:
 	lane_guides.clear()

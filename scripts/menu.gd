@@ -1,4 +1,5 @@
 extends Control
+const INTRO_MUSIC_PATH: String = "res://assets/audio/intro_music.mp3"
 
 @onready var start_button: Button = $Card/Center/StartButton
 @onready var quit_button: Button = $Card/Center/QuitButton
@@ -8,16 +9,20 @@ extends Control
 @onready var daily_seed_label: Label = $Card/Center/DailySeedLabel
 
 var run_mode: String = "standard"
+var intro_player: AudioStreamPlayer = AudioStreamPlayer.new()
 
 func _ready() -> void:
 	start_button.pressed.connect(_on_start_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
 	mode_button.pressed.connect(_on_mode_pressed)
+	_setup_intro_music()
 	run_mode = String(get_tree().get_meta("run_mode", "standard"))
 	_refresh_mode_ui()
 	_refresh_score_labels()
 
 func _on_start_pressed() -> void:
+	if intro_player.playing:
+		intro_player.stop()
 	get_tree().set_meta("run_mode", run_mode)
 	get_tree().change_scene_to_file("res://scenes/Main.tscn")
 
@@ -56,3 +61,26 @@ func _load_best_score() -> int:
 	if err != OK:
 		return 0
 	return int(config.get_value("scores", "best_score", 0))
+
+func _process(_delta: float) -> void:
+	if intro_player.stream != null and not intro_player.playing:
+		intro_player.play()
+
+func _setup_intro_music() -> void:
+	intro_player.name = "IntroMusic"
+	intro_player.bus = "Master"
+	intro_player.volume_db = -9.0
+	add_child(intro_player)
+	if not ResourceLoader.exists(INTRO_MUSIC_PATH):
+		return
+	var stream: AudioStream = load(INTRO_MUSIC_PATH)
+	if stream == null:
+		return
+	if stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = true
+	elif stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	elif stream is AudioStreamWAV:
+		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	intro_player.stream = stream
+	intro_player.play()
