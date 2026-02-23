@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.9"
+const BUILD_VERSION: String = "build-1.2.10"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -361,8 +361,10 @@ func _create_platform(x: float, y: float, width: float, platform_type: int) -> S
 
 	if platform_type == PlatformType.ONE_WAY_UP:
 		_add_platform_chevrons(body, width, true, false, Color(0.72, 0.97, 1.0))
+		_add_platform_rule_markers(body, width, platform_type)
 	elif platform_type == PlatformType.DROP_THROUGH:
 		_add_platform_chevrons(body, width, true, true, Color(1.0, 0.92, 0.54))
+		_add_platform_rule_markers(body, width, platform_type)
 	elif platform_type == PlatformType.GHOST:
 		_add_platform_chevrons(body, width, true, true, Color(0.94, 0.82, 1.0, 0.75))
 		var ghost_core: Polygon2D = Polygon2D.new()
@@ -374,6 +376,7 @@ func _create_platform(x: float, y: float, width: float, platform_type: int) -> S
 		])
 		ghost_core.color = Color(0.82, 0.66, 1.0, 0.45)
 		body.add_child(ghost_core)
+		_add_platform_rule_markers(body, width, platform_type)
 
 	return body
 
@@ -443,6 +446,53 @@ func _add_platform_chevrons(body: StaticBody2D, width: float, show_up: bool, sho
 			])
 			down_mark.color = color
 			body.add_child(down_mark)
+
+func _add_platform_rule_markers(body: StaticBody2D, width: float, platform_type: int) -> void:
+	var marker_count: int = 1 if width < 260.0 else 2
+	for i: int in marker_count:
+		var t: float = 0.18 if marker_count == 1 else (0.16 if i == 0 else 0.84)
+		var mx: float = lerpf(-width * 0.5 + 20.0, width * 0.5 - 20.0, t)
+
+		var plate: Polygon2D = Polygon2D.new()
+		plate.polygon = PackedVector2Array([
+			Vector2(mx - 10.0, -13.0), Vector2(mx + 10.0, -13.0), Vector2(mx + 10.0, 7.0), Vector2(mx - 10.0, 7.0)
+		])
+		if platform_type == PlatformType.ONE_WAY_UP:
+			plate.color = Color(0.08, 0.22, 0.31, 0.85)
+		elif platform_type == PlatformType.DROP_THROUGH:
+			plate.color = Color(0.36, 0.24, 0.08, 0.85)
+		else:
+			plate.color = Color(0.24, 0.14, 0.35, 0.82)
+		body.add_child(plate)
+
+		if platform_type == PlatformType.ONE_WAY_UP:
+			var up_glyph: Polygon2D = Polygon2D.new()
+			up_glyph.polygon = PackedVector2Array([
+				Vector2(mx - 5.0, -2.0), Vector2(mx, -9.0), Vector2(mx + 5.0, -2.0)
+			])
+			up_glyph.color = Color(0.72, 0.98, 1.0)
+			body.add_child(up_glyph)
+		elif platform_type == PlatformType.DROP_THROUGH:
+			var up_glyph_dt: Polygon2D = Polygon2D.new()
+			up_glyph_dt.polygon = PackedVector2Array([
+				Vector2(mx - 5.0, -4.0), Vector2(mx, -10.0), Vector2(mx + 5.0, -4.0)
+			])
+			up_glyph_dt.color = Color(1.0, 0.95, 0.62)
+			body.add_child(up_glyph_dt)
+
+			var down_glyph_dt: Polygon2D = Polygon2D.new()
+			down_glyph_dt.polygon = PackedVector2Array([
+				Vector2(mx - 5.0, 0.0), Vector2(mx, 6.0), Vector2(mx + 5.0, 0.0)
+			])
+			down_glyph_dt.color = Color(1.0, 0.84, 0.44)
+			body.add_child(down_glyph_dt)
+		else:
+			var ring: Polygon2D = Polygon2D.new()
+			ring.polygon = PackedVector2Array([
+				Vector2(mx - 6.0, -2.0), Vector2(mx, -8.0), Vector2(mx + 6.0, -2.0), Vector2(mx, 4.0)
+			])
+			ring.color = Color(0.96, 0.88, 1.0, 0.85)
+			body.add_child(ring)
 
 func _place_coins(x: float, y: float, width: float, lane: int) -> void:
 	var count: int = 4 + int(width / 180.0)
