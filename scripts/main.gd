@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.8"
+const BUILD_VERSION: String = "build-1.2.9"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -48,6 +48,8 @@ const BRANCH_DROP_THROUGH_CHANCE_TOP: float = 0.30
 const LANE_GUIDE_LENGTH: float = 5600.0
 const LANE_GUIDE_AHEAD: float = 1900.0
 const LANE_GUIDE_BEHIND: float = 700.0
+const PLATFORM_PANEL_GAP: float = 56.0
+const PLATFORM_RIVET_GAP: float = 46.0
 
 const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
@@ -329,14 +331,19 @@ func _create_platform(x: float, y: float, width: float, platform_type: int) -> S
 		Vector2(width * 0.5, PLATFORM_THICKNESS * 0.5),
 		Vector2(-width * 0.5, PLATFORM_THICKNESS * 0.5)
 	])
+	var top_strip_color: Color = Color.WHITE
 	if platform_type == PlatformType.GHOST:
 		visual.color = Color(0.38, 0.35, 0.58, 0.55)
+		top_strip_color = Color(0.84, 0.72, 1.0, 0.65)
 	elif platform_type == PlatformType.DROP_THROUGH:
 		visual.color = Color(0.64, 0.45, 0.19)
+		top_strip_color = Color(1.0, 0.84, 0.30)
 	elif platform_type == PlatformType.ONE_WAY_UP:
 		visual.color = Color(0.20, 0.49, 0.66)
+		top_strip_color = Color(0.50, 0.94, 1.0)
 	else:
 		visual.color = Color(0.36, 0.42, 0.52)
+		top_strip_color = Color(0.68, 0.84, 0.98)
 	body.add_child(visual)
 
 	var top_strip: Polygon2D = Polygon2D.new()
@@ -346,15 +353,11 @@ func _create_platform(x: float, y: float, width: float, platform_type: int) -> S
 		Vector2(width * 0.5, -PLATFORM_THICKNESS * 0.2),
 		Vector2(-width * 0.5, -PLATFORM_THICKNESS * 0.2)
 	])
-	if platform_type == PlatformType.GHOST:
-		top_strip.color = Color(0.84, 0.72, 1.0, 0.65)
-	elif platform_type == PlatformType.DROP_THROUGH:
-		top_strip.color = Color(1.0, 0.84, 0.30)
-	elif platform_type == PlatformType.ONE_WAY_UP:
-		top_strip.color = Color(0.50, 0.94, 1.0)
-	else:
-		top_strip.color = Color(0.68, 0.84, 0.98)
+	top_strip.color = top_strip_color
 	body.add_child(top_strip)
+
+	if platform_type != PlatformType.GHOST:
+		_add_platform_surface_details(body, width, visual.color, top_strip_color)
 
 	if platform_type == PlatformType.ONE_WAY_UP:
 		_add_platform_chevrons(body, width, true, false, Color(0.72, 0.97, 1.0))
@@ -373,6 +376,42 @@ func _create_platform(x: float, y: float, width: float, platform_type: int) -> S
 		body.add_child(ghost_core)
 
 	return body
+
+func _add_platform_surface_details(body: StaticBody2D, width: float, base_color: Color, trim_color: Color) -> void:
+	var panel_count: int = maxi(1, mini(10, int(width / PLATFORM_PANEL_GAP)))
+	for i: int in panel_count:
+		var t: float = float(i + 1) / float(panel_count + 1)
+		var px: float = lerpf(-width * 0.5 + 18.0, width * 0.5 - 18.0, t)
+		var panel: Polygon2D = Polygon2D.new()
+		panel.polygon = PackedVector2Array([
+			Vector2(px - 14.0, -6.0),
+			Vector2(px + 14.0, -6.0),
+			Vector2(px + 14.0, 5.5),
+			Vector2(px - 14.0, 5.5)
+		])
+		panel.color = base_color.darkened(0.16)
+		body.add_child(panel)
+
+		var panel_glow: Polygon2D = Polygon2D.new()
+		panel_glow.polygon = PackedVector2Array([
+			Vector2(px - 11.0, -5.0),
+			Vector2(px + 11.0, -5.0),
+			Vector2(px + 11.0, -3.2),
+			Vector2(px - 11.0, -3.2)
+		])
+		panel_glow.color = trim_color.lightened(0.12)
+		body.add_child(panel_glow)
+
+	var rivet_count: int = maxi(2, mini(14, int(width / PLATFORM_RIVET_GAP)))
+	for i: int in rivet_count:
+		var t: float = float(i + 1) / float(rivet_count + 1)
+		var rx: float = lerpf(-width * 0.5 + 10.0, width * 0.5 - 10.0, t)
+		var rivet: Polygon2D = Polygon2D.new()
+		rivet.polygon = PackedVector2Array([
+			Vector2(rx - 2.2, -9.2), Vector2(rx + 2.2, -9.2), Vector2(rx + 2.2, -5.8), Vector2(rx - 2.2, -5.8)
+		])
+		rivet.color = trim_color.lightened(0.06)
+		body.add_child(rivet)
 
 func _lane_for_y(y: float) -> int:
 	var closest_idx: int = 0
