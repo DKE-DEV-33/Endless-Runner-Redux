@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.13"
+const BUILD_VERSION: String = "build-1.2.14"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -59,6 +59,11 @@ const SECTION_COLORS: Array[Color] = [
 	Color(0.06, 0.10, 0.12), # Alloy storm
 	Color(0.09, 0.06, 0.13), # Rift violet
 ]
+const BIOMES: Array[Dictionary] = [
+	{"name": "Foundry Rim", "hazard_mult": 0.95, "coin_bonus": 1},
+	{"name": "Rift Span", "hazard_mult": 1.18, "coin_bonus": 0},
+	{"name": "Ember Vault", "hazard_mult": 1.06, "coin_bonus": 2},
+]
 
 @onready var player = $Player
 @onready var world_background: ColorRect = $WorldBackground
@@ -97,6 +102,7 @@ var mission_complete_until: float = 0.0
 var last_lane: int = START_LANE
 var run_seconds: float = 0.0
 var current_section: int = 0
+var current_biome_index: int = 0
 var hazard_hit_cooldown: float = 0.0
 var danger_routes_since_health: int = 0
 var routes_since_speed_pickup: int = 0
@@ -139,6 +145,7 @@ func _ready() -> void:
 	_init_mission()
 	_prewarm_post_bootstrap_route()
 	next_rift_at = rng.randf_range(RIFT_MIN_SECONDS, RIFT_MAX_SECONDS)
+	_apply_biome_for_section(0, false)
 	_apply_section_theme(0)
 	score_label.text = "Score: 0"
 	health_label.text = "Health: %d" % health
@@ -179,10 +186,11 @@ func _process(delta: float) -> void:
 	if _bootstrap_active():
 		status_label.text = "Status: SKY-FORGE DOCK"
 	else:
+		var biome_name: String = _current_biome().get("name", "Foundry Rim")
 		if rift_active:
-			status_label.text = "Status: RIFT STORM | Pace %d" % player.get_pace_level()
+			status_label.text = "Status: RIFT STORM (%s) | Pace %d" % [biome_name, player.get_pace_level()]
 		else:
-			status_label.text = "Status: FORGE RUN | Pace %d" % player.get_pace_level()
+			status_label.text = "Status: FORGE RUN (%s) | Pace %d" % [biome_name, player.get_pace_level()]
 		while next_spawn_x < player.global_position.x + PLAYER_AHEAD_SPAWN:
 			_spawn_segment()
 
@@ -496,7 +504,8 @@ func _add_platform_rule_markers(body: StaticBody2D, width: float, platform_type:
 			body.add_child(ring)
 
 func _place_coins(x: float, y: float, width: float, lane: int) -> void:
-	var count: int = 4 + int(width / 180.0)
+	var count: int = 4 + int(width / 180.0) + int(_current_biome().get("coin_bonus", 0))
+	count = clampi(count, 3, 9)
 	var coin_y: float = y - 56.0
 	if lane >= 2:
 		coin_y = y - 46.0
@@ -513,7 +522,8 @@ func _maybe_place_big_coin(x: float, y: float, width: float, lane: int, chance: 
 		return
 	if width < 240.0:
 		return
-	if rng.randf() > chance:
+	var adjusted_chance: float = chance + (float(_current_biome().get("coin_bonus", 0)) * 0.015)
+	if rng.randf() > adjusted_chance:
 		return
 	var bx: float = x + rng.randf_range(width * 0.35, width * 0.72)
 	var by: float = y - 72.0
@@ -524,12 +534,15 @@ func _maybe_place_big_coin(x: float, y: float, width: float, lane: int, chance: 
 func _place_hazards(x: float, y: float, width: float, lane: int) -> void:
 	if lane > 2:
 		return
-	if width < 260.0 and rng.randf() < 0.5:
+	var hazard_mult: float = float(_current_biome().get("hazard_mult", 1.0))
+	var skip_chance: float = clampf(0.5 / hazard_mult, 0.18, 0.72)
+	if width < 260.0 and rng.randf() < skip_chance:
 		return
 
 	var pattern_roll: float = rng.randf()
 	if rift_active:
 		pattern_roll += 0.18
+	pattern_roll += (hazard_mult - 1.0) * 0.12
 
 	if pattern_roll < 0.34:
 		_spawn_hazard_single(x, y, width)
@@ -987,9 +1000,25 @@ func _update_section_progression() -> void:
 		return
 	while current_section < next_section:
 		current_section += 1
+		_apply_biome_for_section(current_section)
 		_apply_section_theme(current_section)
 		_increment_pace_level(1, "Sector shift")
 		_play_sfx_tone(640.0, 0.12, -9.0)
+
+func _apply_biome_for_section(section_index: int, announce: bool = true) -> void:
+	if BIOMES.is_empty():
+		current_biome_index = 0
+		return
+	var next_idx: int = section_index % BIOMES.size()
+	var changed: bool = next_idx != current_biome_index
+	current_biome_index = next_idx
+	if changed and announce:
+		_set_info_notice("Entering %s" % _current_biome().get("name", "Sky-Forge"), 3.0)
+
+func _current_biome() -> Dictionary:
+	if BIOMES.is_empty():
+		return {"name": "Sky-Forge", "hazard_mult": 1.0, "coin_bonus": 0}
+	return BIOMES[current_biome_index]
 
 func _apply_section_theme(section_index: int) -> void:
 	if SECTION_COLORS.is_empty():
@@ -1083,7 +1112,7 @@ func _compute_health_spawn_chance() -> float:
 	return clampf(chance, 0.04, 0.90)
 
 func _base_info_text() -> String:
-	return "Mode: %s | Plates: up=up-through | up+down=drop-through (Down+Jump) | diamond=ghost | Big coin x10" % run_mode.capitalize()
+	return "Mode: %s | Biome: %s | Plates: up=up-through | up+down=drop-through (Down+Jump) | diamond=ghost | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
 
 func _refresh_info_label() -> void:
 	var text: String = _base_info_text()
