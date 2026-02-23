@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.14"
+const BUILD_VERSION: String = "build-1.2.15"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -45,6 +45,9 @@ const DROP_THROUGH_SUPPRESS_SEGMENTS: int = 2
 const DROP_THROUGH_PITY_SEGMENTS: int = 6
 const BRANCH_DROP_THROUGH_CHANCE_MID: float = 0.22
 const BRANCH_DROP_THROUGH_CHANCE_TOP: float = 0.30
+const HAZARD_SEGMENT_BASE_CHANCE: float = 0.56
+const HAZARD_SEGMENT_COOLDOWN_CHANCE: float = 0.18
+const HAZARD_SEGMENT_PITY_COUNT: int = 3
 const LANE_GUIDE_LENGTH: float = 5600.0
 const LANE_GUIDE_AHEAD: float = 1900.0
 const LANE_GUIDE_BEHIND: float = 700.0
@@ -63,6 +66,11 @@ const BIOMES: Array[Dictionary] = [
 	{"name": "Foundry Rim", "hazard_mult": 0.95, "coin_bonus": 1},
 	{"name": "Rift Span", "hazard_mult": 1.18, "coin_bonus": 0},
 	{"name": "Ember Vault", "hazard_mult": 1.06, "coin_bonus": 2},
+]
+const BIOME_MUSIC_PATHS: Array[String] = [
+	"res://assets/audio/foundry_rim.ogg",
+	"res://assets/audio/rift_span.ogg",
+	"res://assets/audio/ember_vault.ogg",
 ]
 
 @onready var player = $Player
@@ -104,6 +112,7 @@ var run_seconds: float = 0.0
 var current_section: int = 0
 var current_biome_index: int = 0
 var hazard_hit_cooldown: float = 0.0
+var segments_since_hazard_spawn: int = 2
 var danger_routes_since_health: int = 0
 var routes_since_speed_pickup: int = 0
 var run_mode: String = "standard"
@@ -111,6 +120,8 @@ var run_seed: int = 0
 var sfx_volume_db: float = -6.0
 var info_notice: String = ""
 var info_notice_until: float = 0.0
+var run_end_requested: bool = false
+var music_player: AudioStreamPlayer = AudioStreamPlayer.new()
 
 var rift_active: bool = false
 var rift_until: float = 0.0
@@ -142,6 +153,7 @@ func _ready() -> void:
 	_build_static_opening()
 	_build_lane_guides()
 	_build_parallax_layers()
+	_setup_biome_music()
 	_init_mission()
 	_prewarm_post_bootstrap_route()
 	next_rift_at = rng.randf_range(RIFT_MIN_SECONDS, RIFT_MAX_SECONDS)
@@ -249,7 +261,11 @@ func _spawn_segment() -> void:
 
 	_place_coins(next_spawn_x, y, segment_len, lane)
 	_maybe_place_big_coin(next_spawn_x, y, segment_len, lane)
-	_place_hazards(next_spawn_x, y, segment_len, lane)
+	var hazards_spawned: bool = _place_hazards(next_spawn_x, y, segment_len, lane)
+	if hazards_spawned:
+		segments_since_hazard_spawn = 0
+	else:
+		segments_since_hazard_spawn += 1
 	routes_since_speed_pickup += 1
 	var speed_spawned: bool = _maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane)
 	if not speed_spawned and routes_since_speed_pickup >= SPEED_PICKUP_PITY_SEGMENTS and player.get_pace_level() >= 4:
@@ -531,13 +547,21 @@ func _maybe_place_big_coin(x: float, y: float, width: float, lane: int, chance: 
 	big_coins.append(big_coin)
 	add_child(big_coin)
 
-func _place_hazards(x: float, y: float, width: float, lane: int) -> void:
+func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 	if lane > 2:
-		return
+		return false
 	var hazard_mult: float = float(_current_biome().get("hazard_mult", 1.0))
 	var skip_chance: float = clampf(0.5 / hazard_mult, 0.18, 0.72)
 	if width < 260.0 and rng.randf() < skip_chance:
-		return
+		return false
+
+	var segment_hazard_chance: float = clampf(HAZARD_SEGMENT_BASE_CHANCE * hazard_mult, 0.22, 0.80)
+	if segments_since_hazard_spawn <= 0:
+		segment_hazard_chance = HAZARD_SEGMENT_COOLDOWN_CHANCE
+	elif segments_since_hazard_spawn >= HAZARD_SEGMENT_PITY_COUNT:
+		segment_hazard_chance = maxf(segment_hazard_chance, 0.92)
+	if rng.randf() > segment_hazard_chance:
+		return false
 
 	var pattern_roll: float = rng.randf()
 	if rift_active:
@@ -554,6 +578,7 @@ func _place_hazards(x: float, y: float, width: float, lane: int) -> void:
 	if rift_active and width > 320.0 and rng.randf() < 0.45:
 		var spike_x: float = x + rng.randf_range(120.0, width - 90.0)
 		_spawn_hazard_at(Vector2(spike_x, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+	return true
 
 func _spawn_hazard_single(x: float, y: float, width: float) -> void:
 	if rng.randf() < 0.35:
@@ -1012,6 +1037,7 @@ func _apply_biome_for_section(section_index: int, announce: bool = true) -> void
 	var next_idx: int = section_index % BIOMES.size()
 	var changed: bool = next_idx != current_biome_index
 	current_biome_index = next_idx
+	_update_biome_music()
 	if changed and announce:
 		_set_info_notice("Entering %s" % _current_biome().get("name", "Sky-Forge"), 3.0)
 
@@ -1019,6 +1045,29 @@ func _current_biome() -> Dictionary:
 	if BIOMES.is_empty():
 		return {"name": "Sky-Forge", "hazard_mult": 1.0, "coin_bonus": 0}
 	return BIOMES[current_biome_index]
+
+func _setup_biome_music() -> void:
+	music_player.name = "BiomeMusic"
+	music_player.bus = "Master"
+	music_player.volume_db = -14.0
+	add_child(music_player)
+	_update_biome_music()
+
+func _update_biome_music() -> void:
+	if current_biome_index < 0 or current_biome_index >= BIOME_MUSIC_PATHS.size():
+		return
+	var path: String = BIOME_MUSIC_PATHS[current_biome_index]
+	if not ResourceLoader.exists(path):
+		return
+	var stream: AudioStream = load(path)
+	if stream == null:
+		return
+	if stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	if music_player.stream == stream and music_player.playing:
+		return
+	music_player.stream = stream
+	music_player.play()
 
 func _apply_section_theme(section_index: int) -> void:
 	if SECTION_COLORS.is_empty():
@@ -1132,6 +1181,15 @@ func _speed_multiplier() -> float:
 	return 1.0 + (float(player.get_pace_level()) * 0.1)
 
 func _end_run_and_return_to_menu() -> void:
+	if run_end_requested:
+		return
+	run_end_requested = true
+	if Engine.is_in_physics_frame():
+		call_deferred("_finish_end_run")
+		return
+	_finish_end_run()
+
+func _finish_end_run() -> void:
 	var run_score: int = _current_score()
 	var best_score: int = _load_best_score()
 	var is_new_best: bool = run_score > best_score
