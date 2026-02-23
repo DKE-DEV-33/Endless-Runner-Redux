@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.10"
+const BUILD_VERSION: String = "build-1.2.11"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -145,6 +145,7 @@ func _ready() -> void:
 	status_label.text = "Status: BOOTSTRAP"
 	mission_label.text = _mission_text()
 	_refresh_info_label()
+	_set_info_notice("Rule plates: up arrow=up-through | up+down=drop-through | diamond=ghost", 6.0)
 	version_label.text = "Version: %s" % BUILD_VERSION
 	_setup_pause_ui()
 
@@ -1082,7 +1083,7 @@ func _compute_health_spawn_chance() -> float:
 	return clampf(chance, 0.04, 0.90)
 
 func _base_info_text() -> String:
-	return "Mode: %s | cyan=up-through | amber=drop-through (Down+Jump) | purple=ghost | Big coin: x10" % run_mode.capitalize()
+	return "Mode: %s | Plates: up=up-through | up+down=drop-through (Down+Jump) | diamond=ghost | Big coin x10" % run_mode.capitalize()
 
 func _refresh_info_label() -> void:
 	var text: String = _base_info_text()
