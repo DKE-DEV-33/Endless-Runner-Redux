@@ -65,6 +65,8 @@ offset_right = 8000.0
 offset_bottom = 1200.0
 color = Color(0.03, 0.05, 0.09, 1)
 
+[node name="AtmosphereDecor" type="Node2D" parent="."]
+
 [node name="ParallaxDecor" type="Node2D" parent="."]
 
 [node name="LaneGuides" type="Node2D" parent="."]
@@ -141,7 +143,7 @@ offset_left = 28.0
 offset_top = 662.0
 offset_right = 500.0
 offset_bottom = 690.0
-text = "Version: build-1.2.16"
+text = "Version: build-1.2.17"
 label_settings = SubResource("3")
 
 [node name="PauseLayer" type="CanvasLayer" parent="."]
