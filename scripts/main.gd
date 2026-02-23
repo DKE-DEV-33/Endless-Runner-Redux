@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.15"
+const BUILD_VERSION: String = "build-1.2.16"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -68,9 +68,9 @@ const BIOMES: Array[Dictionary] = [
 	{"name": "Ember Vault", "hazard_mult": 1.06, "coin_bonus": 2},
 ]
 const BIOME_MUSIC_PATHS: Array[String] = [
-	"res://assets/audio/foundry_rim.ogg",
-	"res://assets/audio/rift_span.ogg",
-	"res://assets/audio/ember_vault.ogg",
+	"res://assets/audio/foundry_rim.wav",
+	"res://assets/audio/rift_span.wav",
+	"res://assets/audio/ember_vault.wav",
 ]
 
 @onready var player = $Player
@@ -1064,6 +1064,8 @@ func _update_biome_music() -> void:
 		return
 	if stream is AudioStreamOggVorbis:
 		(stream as AudioStreamOggVorbis).loop = true
+	elif stream is AudioStreamWAV:
+		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
 	if music_player.stream == stream and music_player.playing:
 		return
 	music_player.stream = stream
