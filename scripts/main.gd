@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.19"
+const BUILD_VERSION: String = "build-1.2.20"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -1357,7 +1357,7 @@ func _build_atmosphere_decor() -> void:
 			var bg: Sprite2D = Sprite2D.new()
 			bg.texture = bg_tex
 			bg.centered = true
-			bg.modulate = Color(0.58, 0.72, 0.88, 0.34)
+			bg.modulate = Color(0.86, 0.92, 0.98, 0.58)
 			var vp: Vector2 = get_viewport_rect().size
 			var sx: float = (vp.x / maxf(1.0, float(bg_tex.get_width()))) * 1.35
 			var sy: float = (vp.y / maxf(1.0, float(bg_tex.get_height()))) * 1.35
@@ -1392,7 +1392,7 @@ func _build_atmosphere_decor() -> void:
 		smog.polygon = PackedVector2Array([
 			Vector2(-w * 0.5, -h * 0.3), Vector2(w * 0.5, -h * 0.45), Vector2(w * 0.5, h * 0.55), Vector2(-w * 0.5, h * 0.4)
 		])
-		smog.color = Color(0.32, 0.38, 0.46, 0.17)
+		smog.color = Color(0.32, 0.38, 0.46, 0.11)
 		var sx: float = rng.randf_range(-2600.0, 21000.0)
 		var sy: float = rng.randf_range(20.0, 420.0)
 		smog.position = Vector2(sx, sy)
@@ -1473,7 +1473,7 @@ func _update_atmosphere_decor() -> void:
 		var twinkle: float = float(star.get_meta("twinkle", 1.2))
 		star.position.x = bx + (px * parallax)
 		star.position.y = by + (sin((run_seconds * twinkle) + bx * 0.0015) * 2.0)
-		star.color.a = clampf(0.22 + (0.45 * (0.5 + 0.5 * sin(run_seconds * (1.1 + twinkle)))), 0.14, 0.75)
+		star.color.a = clampf(0.14 + (0.28 * (0.5 + 0.5 * sin(run_seconds * (1.1 + twinkle)))), 0.09, 0.46)
 
 	for entry: Dictionary in atmosphere_embers:
 		var ember: Polygon2D = entry["node"]
@@ -1503,10 +1503,10 @@ func _tint_atmosphere_decor(section_color: Color) -> void:
 		elif node is Sprite2D:
 			var bg_sprite: Sprite2D = node
 			bg_sprite.modulate = Color(
-				clampf(0.42 + section_color.r * 0.52, 0.0, 1.0),
-				clampf(0.48 + section_color.g * 0.48, 0.0, 1.0),
-				clampf(0.56 + section_color.b * 0.56, 0.0, 1.0),
-				0.30
+				clampf(0.74 + section_color.r * 0.26, 0.0, 1.0),
+				clampf(0.78 + section_color.g * 0.22, 0.0, 1.0),
+				clampf(0.82 + section_color.b * 0.28, 0.0, 1.0),
+				0.50
 			)
 
 	var ember_tint: Color = Color(1.0, 0.58, 0.25, 0.42)
@@ -1519,11 +1519,11 @@ func _tint_atmosphere_decor(section_color: Color) -> void:
 		if is_instance_valid(ember):
 			ember.color = ember_tint
 
-	var fog_tint: Color = Color(0.28, 0.34, 0.44, 0.16)
+	var fog_tint: Color = Color(0.28, 0.34, 0.44, 0.10)
 	if current_biome_index == 1:
-		fog_tint = Color(0.22, 0.33, 0.52, 0.20)
+		fog_tint = Color(0.22, 0.33, 0.52, 0.12)
 	elif current_biome_index == 2:
-		fog_tint = Color(0.42, 0.28, 0.24, 0.20)
+		fog_tint = Color(0.42, 0.28, 0.24, 0.12)
 	for entry: Dictionary in atmosphere_smog:
 		var smog: Polygon2D = entry["node"]
 		if is_instance_valid(smog):
