@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.20"
+const BUILD_VERSION: String = "build-1.2.21"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -31,12 +31,16 @@ const SPEED_PICKUP_CHANCE: float = 0.025
 const SPEED_PICKUP_MAX_CHANCE: float = 0.085
 const SPEED_PICKUP_PITY_SEGMENTS: int = 18
 const HAZARD_HIT_COOLDOWN: float = 0.45
+const HAZARD_DODGE_Y_WINDOW: float = 180.0
 const SETTINGS_FILE: String = "user://settings.cfg"
 const HEALTH_PICKUP_PITY_DANGER_ROUTES: int = 5
 const BIG_COIN_VALUE: int = 10
 const PLATFORM_LAYER_SOLID: int = 1
 const PLATFORM_LAYER_ONE_WAY: int = 2
 const INFO_NOTICE_DURATION: float = 3.0
+const COMBO_TIMEOUT: float = 2.8
+const COMBO_BONUS_STEP: int = 12
+const COMBO_MAX: int = 15
 const PARALLAX_BAND_HEIGHT: float = 120.0
 const DROP_THROUGH_BASE_CHANCE: float = 0.20
 const DROP_THROUGH_PITY_CHANCE: float = 0.28
@@ -58,6 +62,10 @@ const ATMOS_EMBER_COUNT: int = 54
 const ATMOS_SPIRE_COUNT: int = 18
 const ATMOS_SMOG_COUNT: int = 8
 const BACKGROUND_ART_PATH: String = "res://assets/images/Background_image.png"
+const ABILITY_PICKUP_BASE_CHANCE: float = 0.075
+const ABILITY_COOLDOWN_SECONDS: float = 16.0
+const SHIELD_HITS_GRANTED: int = 1
+const CHRONO_DURATION: float = 5.5
 
 const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
@@ -117,6 +125,8 @@ var hazard_hit_cooldown: float = 0.0
 var segments_since_hazard_spawn: int = 2
 var danger_routes_since_health: int = 0
 var routes_since_speed_pickup: int = 0
+var combo_count: int = 0
+var combo_timeout_until: float = 0.0
 var run_mode: String = "standard"
 var run_seed: int = 0
 var sfx_volume_db: float = -6.0
@@ -124,6 +134,15 @@ var info_notice: String = ""
 var info_notice_until: float = 0.0
 var run_end_requested: bool = false
 var music_player: AudioStreamPlayer = AudioStreamPlayer.new()
+var shield_hits: int = 0
+var chrono_until: float = 0.0
+var ability_cooldown_until: float = 0.0
+var rift_event_type: int = 0
+var rift_event_name: String = ""
+var rift_event_target: int = 0
+var rift_event_progress: int = 0
+var rift_event_failed: bool = false
+var rift_event_start_x: float = 0.0
 
 var rift_active: bool = false
 var rift_until: float = 0.0
@@ -131,6 +150,8 @@ var next_rift_at: float = 0.0
 
 enum MissionType { COINS, SURVIVE_TIME, NO_HIT_DISTANCE }
 enum PlatformType { SOLID, ONE_WAY_UP, DROP_THROUGH, GHOST }
+enum AbilityType { SHIELD, CHRONO }
+enum RiftEventType { NONE, COIN_SURGE, PHASE_LINE, EMBER_BREAKER }
 var mission_type: int = MissionType.COINS
 var mission_no_hit_start_x: float = 0.0
 
@@ -140,6 +161,7 @@ var big_coins: Array[Area2D] = []
 var hazards: Array[Area2D] = []
 var health_pickups: Array[Area2D] = []
 var speed_pickups: Array[Area2D] = []
+var ability_pickups: Array[Area2D] = []
 var branch_chain_remaining: int = 0
 var parallax_layers: Array[Dictionary] = []
 var atmosphere_stars: Array[Dictionary] = []
@@ -194,15 +216,19 @@ func _process(delta: float) -> void:
 		info_notice = ""
 	_update_rift_state()
 	_update_section_progression()
+	_update_active_abilities()
 	_update_atmosphere_decor()
 	_update_parallax_layers()
 	_update_lane_guides()
+	_check_hazard_dodges()
+	_update_combo_timeout()
+	_update_rift_event_progress()
 	_animate_runtime_visuals()
 	_ensure_music_playing()
 	_refresh_info_label()
 
 	distance_score = int(player.global_position.x / 12.0)
-	score_label.text = "Score: %d (x%.1f)" % [_current_score(), _speed_multiplier()]
+	_refresh_score_label()
 
 	if _bootstrap_active():
 		status_label.text = "Status: SKY-FORGE DOCK"
@@ -279,6 +305,7 @@ func _spawn_segment() -> void:
 	var speed_spawned: bool = _maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane)
 	if not speed_spawned and routes_since_speed_pickup >= SPEED_PICKUP_PITY_SEGMENTS and player.get_pace_level() >= 4:
 		_maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane, 1.0)
+	_maybe_place_ability_pickup(next_spawn_x, y, segment_len, lane)
 	_spawn_branch_routes(next_spawn_x, segment_len, lane)
 
 	var gap: float = _safe_gap_for_transition(last_lane, lane)
@@ -730,6 +757,24 @@ func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int, over
 	add_child(pickup)
 	return true
 
+func _maybe_place_ability_pickup(x: float, y: float, width: float, lane: int) -> bool:
+	if lane > 2:
+		return false
+	if run_seconds < ability_cooldown_until:
+		return false
+	var chance: float = ABILITY_PICKUP_BASE_CHANCE
+	if shield_hits > 0 or chrono_until > run_seconds:
+		chance *= 0.35
+	if rng.randf() > chance:
+		return false
+	var kind: int = AbilityType.SHIELD if rng.randf() < 0.55 else AbilityType.CHRONO
+	var ax: float = x + rng.randf_range(width * 0.30, width * 0.75)
+	var ay: float = y - 82.0
+	var pickup: Area2D = _create_ability_pickup(Vector2(ax, ay), kind)
+	ability_pickups.append(pickup)
+	add_child(pickup)
+	return true
+
 func _create_coin(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
 	area.position = pos
@@ -847,6 +892,43 @@ func _create_speed_pickup(pos: Vector2) -> Area2D:
 	area.body_entered.connect(_on_speed_pickup_body_entered.bind(area))
 	return area
 
+func _create_ability_pickup(pos: Vector2, ability_kind: int) -> Area2D:
+	var area: Area2D = Area2D.new()
+	area.position = pos
+	area.set_meta("ability_kind", ability_kind)
+
+	var shape: CollisionShape2D = CollisionShape2D.new()
+	var circle: CircleShape2D = CircleShape2D.new()
+	circle.radius = 13.0
+	shape.shape = circle
+	area.add_child(shape)
+
+	var ring: Polygon2D = Polygon2D.new()
+	ring.polygon = PackedVector2Array([
+		Vector2(-12, 0), Vector2(0, -12), Vector2(12, 0), Vector2(0, 12)
+	])
+	if ability_kind == AbilityType.SHIELD:
+		ring.color = Color(0.54, 0.93, 1.0, 0.82)
+	else:
+		ring.color = Color(1.0, 0.86, 0.42, 0.84)
+	area.add_child(ring)
+
+	var core: Polygon2D = Polygon2D.new()
+	if ability_kind == AbilityType.SHIELD:
+		core.polygon = PackedVector2Array([
+			Vector2(-5, -2), Vector2(0, -8), Vector2(5, -2), Vector2(3, 6), Vector2(-3, 6)
+		])
+		core.color = Color(0.84, 0.98, 1.0)
+	else:
+		core.polygon = PackedVector2Array([
+			Vector2(-4, -8), Vector2(1, -3), Vector2(-1, 2), Vector2(5, 2), Vector2(-2, 10), Vector2(0, 4), Vector2(-6, 4)
+		])
+		core.color = Color(1.0, 0.95, 0.72)
+	area.add_child(core)
+
+	area.body_entered.connect(_on_ability_pickup_body_entered.bind(area))
+	return area
+
 func _create_health_pickup(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
 	area.position = pos
@@ -874,6 +956,7 @@ func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 		return
 	_play_sfx_tone(980.0, 0.045, -14.0)
 	bonus_score += 25
+	_register_combo(1, "", false)
 	total_coins_collected += 1
 	while total_coins_collected >= next_bonus_heart_at:
 		_apply_health_delta(1)
@@ -881,6 +964,8 @@ func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 		_set_info_notice("Coin milestone reached! +1 HP | Next at %d coins" % next_bonus_heart_at)
 	if mission_type == MissionType.COINS:
 		mission_progress += 1
+	if rift_active and rift_event_type == RiftEventType.COIN_SURGE:
+		rift_event_progress += 1
 	coins.erase(coin)
 	coin.queue_free()
 
@@ -889,6 +974,7 @@ func _on_big_coin_body_entered(body: Node, big_coin: Area2D) -> void:
 		return
 	_play_sfx_tone(1120.0, 0.08, -11.0)
 	bonus_score += 25 * BIG_COIN_VALUE
+	_register_combo(2, "Big relic x10", false)
 	total_coins_collected += BIG_COIN_VALUE
 	while total_coins_collected >= next_bonus_heart_at:
 		_apply_health_delta(1)
@@ -896,6 +982,8 @@ func _on_big_coin_body_entered(body: Node, big_coin: Area2D) -> void:
 		_set_info_notice("Coin milestone reached! +1 HP | Next at %d coins" % next_bonus_heart_at)
 	if mission_type == MissionType.COINS:
 		mission_progress += BIG_COIN_VALUE
+	if rift_active and rift_event_type == RiftEventType.COIN_SURGE:
+		rift_event_progress += BIG_COIN_VALUE
 	big_coins.erase(big_coin)
 	big_coin.queue_free()
 
@@ -905,9 +993,17 @@ func _on_hazard_body_entered(body: Node) -> void:
 	if hazard_hit_cooldown > 0.0:
 		return
 	hazard_hit_cooldown = HAZARD_HIT_COOLDOWN
+	if shield_hits > 0:
+		shield_hits -= 1
+		_play_sfx_tone(520.0, 0.12, -6.0)
+		_set_info_notice("Aegis absorbed impact", 2.0)
+		return
 	_play_sfx_tone(210.0, 0.14, -6.0)
 	_apply_health_delta(-1)
+	_break_combo("Impact taken")
 	mission_no_hit_start_x = player.global_position.x
+	if rift_active and rift_event_type == RiftEventType.PHASE_LINE:
+		rift_event_failed = true
 	if health <= 0:
 		_end_run_and_return_to_menu()
 
@@ -929,6 +1025,24 @@ func _on_speed_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 	_set_info_notice("Flux stabilizer collected: -%d pace (now %d)" % [slow_amount, pace_level])
 	routes_since_speed_pickup = 0
 	speed_pickups.erase(pickup)
+	pickup.queue_free()
+
+func _on_ability_pickup_body_entered(body: Node, pickup: Area2D) -> void:
+	if body != player:
+		return
+	var kind: int = int(pickup.get_meta("ability_kind", AbilityType.SHIELD))
+	if kind == AbilityType.SHIELD:
+		shield_hits = SHIELD_HITS_GRANTED
+		_set_info_notice("Aegis acquired: next hit blocked", 2.8)
+		_play_sfx_tone(420.0, 0.16, -8.0)
+	else:
+		chrono_until = run_seconds + CHRONO_DURATION
+		Engine.time_scale = 0.84
+		_set_info_notice("Chrono surge: time dilated", 2.8)
+		_play_sfx_tone(300.0, 0.18, -8.0)
+	ability_cooldown_until = run_seconds + ABILITY_COOLDOWN_SECONDS
+	_register_combo(1, "Ability chain", false)
+	ability_pickups.erase(pickup)
 	pickup.queue_free()
 
 func _cleanup_old() -> void:
@@ -964,6 +1078,11 @@ func _cleanup_old() -> void:
 			speed_pickups.erase(sp)
 			sp.queue_free()
 
+	for ap: Area2D in ability_pickups.duplicate():
+		if ap.global_position.x < limit:
+			ability_pickups.erase(ap)
+			ap.queue_free()
+
 func _animate_runtime_visuals() -> void:
 	var phase: float = run_seconds * 5.8
 
@@ -994,6 +1113,103 @@ func _animate_runtime_visuals() -> void:
 				elif bool(poly.get_meta("is_flame_inner", false)):
 					poly.scale = Vector2(flicker * 0.95, 1.0 + (flicker - 1.0) * 2.0)
 
+func _refresh_score_label() -> void:
+	var combo_mult: float = 1.0 + (float(combo_count) * 0.08)
+	score_label.text = "Score: %d | Pace x%.1f | Combo x%.2f" % [_current_score(), _speed_multiplier(), combo_mult]
+
+func _register_combo(step: int, reason: String = "", show_notice: bool = false) -> void:
+	if step <= 0:
+		return
+	combo_count = mini(COMBO_MAX, combo_count + step)
+	combo_timeout_until = run_seconds + COMBO_TIMEOUT
+	bonus_score += COMBO_BONUS_STEP * combo_count * step
+	if show_notice and reason != "":
+		_set_info_notice("%s | Combo x%.2f" % [reason, 1.0 + (float(combo_count) * 0.08)], 1.8)
+
+func _update_combo_timeout() -> void:
+	if combo_count <= 0:
+		return
+	if run_seconds >= combo_timeout_until:
+		_break_combo("Combo cooled")
+
+func _break_combo(reason: String = "") -> void:
+	if combo_count <= 0:
+		return
+	combo_count = 0
+	combo_timeout_until = 0.0
+	if reason != "":
+		_set_info_notice(reason, 1.5)
+
+func _check_hazard_dodges() -> void:
+	for hazard: Area2D in hazards:
+		if not is_instance_valid(hazard):
+			continue
+		if bool(hazard.get_meta("dodge_scored", false)):
+			continue
+		if hazard.global_position.x > player.global_position.x - 18.0:
+			continue
+		if absf(hazard.global_position.y - player.global_position.y) > HAZARD_DODGE_Y_WINDOW:
+			continue
+		hazard.set_meta("dodge_scored", true)
+		_register_combo(1, "Clean dodge", false)
+		if rift_active and rift_event_type == RiftEventType.EMBER_BREAKER:
+			rift_event_progress += 1
+
+func _update_active_abilities() -> void:
+	if chrono_until > 0.0 and run_seconds >= chrono_until:
+		chrono_until = 0.0
+		Engine.time_scale = 1.0
+		_set_info_notice("Chrono normalized", 1.6)
+
+	if shield_hits > 0:
+		player.modulate = Color(0.76, 0.96, 1.0, 1.0)
+	elif chrono_until > run_seconds:
+		player.modulate = Color(1.0, 0.92, 0.70, 1.0)
+	else:
+		player.modulate = Color(1, 1, 1, 1)
+
+func _start_rift_event() -> void:
+	rift_event_progress = 0
+	rift_event_failed = false
+	rift_event_start_x = player.global_position.x
+	match current_biome_index:
+		0:
+			rift_event_type = RiftEventType.COIN_SURGE
+			rift_event_name = "Relic Surge"
+			rift_event_target = 12
+		1:
+			rift_event_type = RiftEventType.PHASE_LINE
+			rift_event_name = "Phase Line"
+			rift_event_target = 620 + (mission_tier * 35)
+		_:
+			rift_event_type = RiftEventType.EMBER_BREAKER
+			rift_event_name = "Ember Breaker"
+			rift_event_target = 3
+	_set_info_notice("%s live" % rift_event_name, 2.2)
+
+func _update_rift_event_progress() -> void:
+	if not rift_active:
+		return
+	if rift_event_type == RiftEventType.PHASE_LINE and not rift_event_failed:
+		rift_event_progress = maxi(rift_event_progress, int(player.global_position.x - rift_event_start_x))
+
+func _resolve_rift_event() -> void:
+	if rift_event_type == RiftEventType.NONE:
+		return
+	var success: bool = (not rift_event_failed) and rift_event_progress >= rift_event_target
+	if success:
+		var reward: int = 360 + (mission_tier * 45)
+		bonus_score += reward
+		_register_combo(2, "", false)
+		_set_info_notice("%s complete! +%d" % [rift_event_name, reward], 2.6)
+	else:
+		_set_info_notice("%s failed" % rift_event_name, 1.8)
+	rift_event_type = RiftEventType.NONE
+	rift_event_name = ""
+	rift_event_target = 0
+	rift_event_progress = 0
+	rift_event_failed = false
+
 func _pick_reachable_lane(previous_lane: int) -> int:
 	var picked: int = rng.randi_range(maxi(0, previous_lane - 1), mini(LANE_Y.size() - 1, previous_lane + 1))
 	return picked
@@ -1019,12 +1235,14 @@ func _update_rift_state() -> void:
 	if rift_active:
 		if run_seconds >= rift_until:
 			rift_active = false
+			_resolve_rift_event()
 			next_rift_at = run_seconds + rng.randf_range(RIFT_MIN_SECONDS, RIFT_MAX_SECONDS)
 		return
 
 	if run_seconds >= next_rift_at:
 		rift_active = true
 		rift_until = run_seconds + RIFT_DURATION
+		_start_rift_event()
 
 func _update_section_progression() -> void:
 	if _bootstrap_active():
@@ -1181,7 +1399,10 @@ func _compute_health_spawn_chance() -> float:
 	return clampf(chance, 0.04, 0.90)
 
 func _base_info_text() -> String:
-	return "Mode: %s | Biome: %s | Plates: up=up-through | up+down=drop-through (Down+Jump) | diamond=ghost | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
+	var text: String = "Mode: %s | Biome: %s | Plates: up=up-through | up+down=drop-through (Down+Jump) | diamond=ghost | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
+	if rift_active and rift_event_type != RiftEventType.NONE:
+		text += " | Event: %s %d/%d" % [rift_event_name, rift_event_progress, rift_event_target]
+	return text
 
 func _refresh_info_label() -> void:
 	var text: String = _base_info_text()
@@ -1210,6 +1431,7 @@ func _end_run_and_return_to_menu() -> void:
 	_finish_end_run()
 
 func _finish_end_run() -> void:
+	Engine.time_scale = 1.0
 	var run_score: int = _current_score()
 	var best_score: int = _load_best_score()
 	var is_new_best: bool = run_score > best_score
@@ -1275,10 +1497,12 @@ func _on_resume_pressed() -> void:
 	get_tree().paused = false
 
 func _on_restart_pressed() -> void:
+	Engine.time_scale = 1.0
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/Main.tscn")
 
 func _on_menu_pressed() -> void:
+	Engine.time_scale = 1.0
 	get_tree().paused = false
 	_end_run_and_return_to_menu()
 
