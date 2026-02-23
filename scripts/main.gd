@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.18"
+const BUILD_VERSION: String = "build-1.2.19"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -1354,20 +1354,19 @@ func _build_atmosphere_decor() -> void:
 	if ResourceLoader.exists(BACKGROUND_ART_PATH):
 		var bg_tex: Texture2D = load(BACKGROUND_ART_PATH)
 		if bg_tex != null:
-			for i: int in 2:
-				var bg: Sprite2D = Sprite2D.new()
-				bg.texture = bg_tex
-				bg.centered = true
-				bg.modulate = Color(0.58, 0.72, 0.88, 0.26)
-				bg.scale = Vector2(2.2, 2.2)
-				var bx: float = -1200.0 + (i * 2800.0)
-				var by: float = 200.0
-				bg.position = Vector2(bx, by)
-				bg.set_meta("base_x", bx)
-				bg.set_meta("base_y", by)
-				bg.set_meta("parallax", 0.06)
-				atmosphere_decor.add_child(bg)
-				atmosphere_spires.append({"node": bg, "is_texture": true})
+			var bg: Sprite2D = Sprite2D.new()
+			bg.texture = bg_tex
+			bg.centered = true
+			bg.modulate = Color(0.58, 0.72, 0.88, 0.34)
+			var vp: Vector2 = get_viewport_rect().size
+			var sx: float = (vp.x / maxf(1.0, float(bg_tex.get_width()))) * 1.35
+			var sy: float = (vp.y / maxf(1.0, float(bg_tex.get_height()))) * 1.35
+			var scale_fill: float = maxf(sx, sy)
+			bg.scale = Vector2(scale_fill, scale_fill)
+			bg.position = player.global_position + Vector2(160.0, -120.0)
+			bg.set_meta("screen_locked", true)
+			atmosphere_decor.add_child(bg)
+			atmosphere_spires.append({"node": bg, "is_texture": true})
 
 	for i: int in ATMOS_SPIRE_COUNT:
 		var spire: Polygon2D = Polygon2D.new()
@@ -1443,6 +1442,9 @@ func _update_atmosphere_decor() -> void:
 	for entry: Dictionary in atmosphere_spires:
 		var node: Node2D = entry["node"]
 		if not is_instance_valid(node):
+			continue
+		if bool(node.get_meta("screen_locked", false)):
+			node.position = player.global_position + Vector2(160.0, -120.0)
 			continue
 		var bx: float = float(node.get_meta("base_x", node.position.x))
 		var by: float = float(node.get_meta("base_y", node.position.y))
