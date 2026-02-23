@@ -117,7 +117,7 @@ offset_left = 28.0
 offset_top = 74.0
 offset_right = 780.0
 offset_bottom = 102.0
-text = "Status: BOOTSTRAP"
+text = "Status: SKY-FORGE DOCK"
 label_settings = SubResource("3")
 
 [node name="MissionLabel" type="Label" parent="CanvasLayer"]
@@ -125,7 +125,7 @@ offset_left = 28.0
 offset_top = 100.0
 offset_right = 860.0
 offset_bottom = 126.0
-text = "Mission: Collect 40 coins (0/40)"
+text = "Directive 1: Recover relic shards (0/40)"
 label_settings = SubResource("3")
 
 [node name="InfoLabel" type="Label" parent="CanvasLayer"]
@@ -141,7 +141,7 @@ offset_left = 28.0
 offset_top = 662.0
 offset_right = 500.0
 offset_bottom = 690.0
-text = "Version: build-1.2.12"
+text = "Version: build-1.2.13"
 label_settings = SubResource("3")
 
 [node name="PauseLayer" type="CanvasLayer" parent="."]

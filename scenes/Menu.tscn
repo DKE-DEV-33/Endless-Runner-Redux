@@ -99,7 +99,7 @@ theme_override_constants/separation = 14
 
 [node name="Title" type="Label" parent="Card/Center"]
 layout_mode = 2
-text = "ENDLESS RUNNER REDUX"
+text = "SKY-FORGE RELAY"
 horizontal_alignment = 1
 label_settings = SubResource("1")
 

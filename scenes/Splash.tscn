@@ -53,13 +53,13 @@ alignment = 1
 
 [node name="Logo" type="Label" parent="Center"]
 layout_mode = 2
-text = "ENDLESS RUNNER"
+text = "SKY-FORGE RELAY"
 horizontal_alignment = 1
 label_settings = SubResource("1")
 
 [node name="Sub" type="Label" parent="Center"]
 layout_mode = 2
-text = "Redux"
+text = "Relic Courier Protocol"
 horizontal_alignment = 1
 modulate = Color(0.55, 0.78, 1, 1)
 label_settings = SubResource("2")

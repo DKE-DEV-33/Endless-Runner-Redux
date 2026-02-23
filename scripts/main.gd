@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.12"
+const BUILD_VERSION: String = "build-1.2.13"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -53,11 +53,11 @@ const PLATFORM_RIVET_GAP: float = 46.0
 
 const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
-	Color(0.03, 0.05, 0.09),
-	Color(0.05, 0.08, 0.14),
-	Color(0.08, 0.05, 0.12),
-	Color(0.06, 0.10, 0.10),
-	Color(0.09, 0.06, 0.08),
+	Color(0.03, 0.05, 0.08), # Forge dusk
+	Color(0.05, 0.09, 0.15), # Reactor blue
+	Color(0.12, 0.07, 0.09), # Ember haze
+	Color(0.06, 0.10, 0.12), # Alloy storm
+	Color(0.09, 0.06, 0.13), # Rift violet
 ]
 
 @onready var player = $Player
@@ -142,7 +142,7 @@ func _ready() -> void:
 	_apply_section_theme(0)
 	score_label.text = "Score: 0"
 	health_label.text = "Health: %d" % health
-	status_label.text = "Status: BOOTSTRAP"
+	status_label.text = "Status: SKY-FORGE DOCK"
 	mission_label.text = _mission_text()
 	_refresh_info_label()
 	_set_info_notice("Rule plates: up arrow=up-through | up+down=drop-through | diamond=ghost", 6.0)
@@ -177,12 +177,12 @@ func _process(delta: float) -> void:
 	score_label.text = "Score: %d (x%.1f)" % [_current_score(), _speed_multiplier()]
 
 	if _bootstrap_active():
-		status_label.text = "Status: BOOTSTRAP"
+		status_label.text = "Status: SKY-FORGE DOCK"
 	else:
 		if rift_active:
-			status_label.text = "Status: RIFT SURGE | Pace %d" % player.get_pace_level()
+			status_label.text = "Status: RIFT STORM | Pace %d" % player.get_pace_level()
 		else:
-			status_label.text = "Status: LIVE RUN | Pace %d" % player.get_pace_level()
+			status_label.text = "Status: FORGE RUN | Pace %d" % player.get_pace_level()
 		while next_spawn_x < player.global_position.x + PLAYER_AHEAD_SPAWN:
 			_spawn_segment()
 
@@ -1015,7 +1015,7 @@ func _init_mission() -> void:
 			mission_target = mini(130, 35 + (mission_tier * 10))
 		MissionType.NO_HIT_DISTANCE:
 			mission_target = mini(5200, 900 + (mission_tier * 420))
-	_set_info_notice("Mission %d live" % mission_tier, 2.4)
+	_set_info_notice("Directive %d live" % mission_tier, 2.4)
 
 func _update_mission_progress() -> void:
 	if mission_completed:
@@ -1033,9 +1033,9 @@ func _update_mission_progress() -> void:
 		mission_complete_until = run_seconds + 2.0
 		var reward: int = MISSION_BONUS_BASE + ((mission_tier - 1) * 75)
 		bonus_score += reward
-		_increment_pace_level(1, "Mission complete")
+		_increment_pace_level(1, "Directive complete")
 		_play_sfx_tone(760.0, 0.16, -8.0)
-		_set_info_notice("Mission %d complete! +%d | Pace %d" % [mission_tier, reward, player.get_pace_level()])
+		_set_info_notice("Directive %d complete! +%d | Pace %d" % [mission_tier, reward, player.get_pace_level()])
 
 func _tick_mission_chain() -> void:
 	if not mission_completed:
@@ -1049,12 +1049,12 @@ func _mission_text() -> String:
 	var suffix: String = " (Complete)" if mission_progress >= mission_target else ""
 	match mission_type:
 		MissionType.COINS:
-			return "Mission %d: Collect %d coins (%d/%d)%s" % [mission_tier, mission_target, mission_progress, mission_target, suffix]
+			return "Directive %d: Recover %d relic shards (%d/%d)%s" % [mission_tier, mission_target, mission_progress, mission_target, suffix]
 		MissionType.SURVIVE_TIME:
-			return "Mission %d: Survive %ds (%d/%d)%s" % [mission_tier, mission_target, mission_progress, mission_target, suffix]
+			return "Directive %d: Endure the forge for %ds (%d/%d)%s" % [mission_tier, mission_target, mission_progress, mission_target, suffix]
 		MissionType.NO_HIT_DISTANCE:
-			return "Mission %d: No-hit %dpx (%d/%d)%s" % [mission_tier, mission_target, mission_progress, mission_target, suffix]
-	return "Mission: --"
+			return "Directive %d: Hold clean line for %dpx (%d/%d)%s" % [mission_tier, mission_target, mission_progress, mission_target, suffix]
+	return "Directive: --"
 
 func _apply_health_delta(delta: int) -> void:
 	health = clampi(health + delta, 0, MAX_HEALTH)
