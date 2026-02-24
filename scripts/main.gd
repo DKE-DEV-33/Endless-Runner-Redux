@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.22"
+const BUILD_VERSION: String = "build-1.2.23"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -70,7 +70,10 @@ const HEALTH_COLOR_SAFE: Color = Color(0.88, 1.0, 0.88)
 const HEALTH_COLOR_WARN: Color = Color(1.0, 0.92, 0.52)
 const HEALTH_COLOR_CRIT: Color = Color(1.0, 0.52, 0.52)
 
-const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
+const LANE_Y: Array[float] = [468.0, 306.0, 144.0]
+const HAZARD_EDGE_CLEARANCE: float = 84.0
+const HAZARD_BRANCH_MIN_RATIO: float = 0.42
+const HAZARD_BRANCH_MAX_RATIO: float = 0.66
 const SECTION_COLORS: Array[Color] = [
 	Color(0.03, 0.05, 0.08), # Forge dusk
 	Color(0.05, 0.09, 0.15), # Reactor blue
@@ -622,15 +625,17 @@ func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 func _spawn_hazard_single(x: float, y: float, width: float) -> void:
 	if rng.randf() < 0.35:
 		return
-	var hx: float = x + clampf(width * rng.randf_range(0.40, 0.70), 82.0, width - 82.0)
+	var hx: float = _hazard_x(x, width, rng.randf_range(0.40, 0.70))
 	_spawn_hazard_at(Vector2(hx, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
 
 func _spawn_hazard_pair(x: float, y: float, width: float) -> void:
 	if width < 290.0:
 		_spawn_hazard_single(x, y, width)
 		return
-	var first_x: float = x + clampf(width * rng.randf_range(0.28, 0.38), 80.0, width - 160.0)
-	var second_x: float = x + clampf(width * rng.randf_range(0.62, 0.74), 160.0, width - 80.0)
+	var first_x: float = _hazard_x(x, width, rng.randf_range(0.30, 0.40))
+	var second_x: float = _hazard_x(x, width, rng.randf_range(0.60, 0.74))
+	if second_x - first_x < 72.0:
+		second_x = minf(x + width - HAZARD_EDGE_CLEARANCE, first_x + 72.0)
 	_spawn_hazard_at(Vector2(first_x, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
 	_spawn_hazard_at(Vector2(second_x, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
 
@@ -638,9 +643,12 @@ func _spawn_hazard_gate(x: float, y: float, width: float) -> void:
 	if width < 330.0:
 		_spawn_hazard_pair(x, y, width)
 		return
-	var center: float = x + clampf(width * rng.randf_range(0.55, 0.72), 160.0, width - 160.0)
-	_spawn_hazard_at(Vector2(center - 38.0, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
-	_spawn_hazard_at(Vector2(center + 38.0, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+	var center: float = _hazard_x(x, width, rng.randf_range(0.55, 0.70))
+	_spawn_hazard_at(Vector2(maxf(x + HAZARD_EDGE_CLEARANCE, center - 38.0), y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+	_spawn_hazard_at(Vector2(minf(x + width - HAZARD_EDGE_CLEARANCE, center + 38.0), y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+
+func _hazard_x(x: float, width: float, ratio: float) -> float:
+	return x + clampf(width * ratio, HAZARD_EDGE_CLEARANCE, width - HAZARD_EDGE_CLEARANCE)
 
 func _spawn_hazard_at(pos: Vector2) -> void:
 	var hazard: Area2D = _create_hazard(pos)
@@ -734,13 +742,24 @@ func _spawn_single_branch_platform(x: float, width: float, base_lane: int, targe
 	_maybe_place_big_coin(alt_x, target_y, alt_width, target_lane, 0.30 + (0.08 * float(lane_delta - 1)))
 
 	danger_routes_since_health += 1
-	if rng.randf() < 0.60 + (0.08 * float(lane_delta - 1)):
-		_spawn_hazard_single(alt_x, target_y, alt_width)
+	_maybe_spawn_branch_hazard(alt_x, target_y, alt_width, lane_delta)
 
 	var health_spawn_chance: float = _compute_health_spawn_chance()
 	var health_spawned: bool = _maybe_place_health_pickup(alt_x, target_y, alt_width, target_lane, health_spawn_chance)
 	if not health_spawned and health <= 3 and danger_routes_since_health >= HEALTH_PICKUP_PITY_DANGER_ROUTES:
 		_maybe_place_health_pickup(alt_x, target_y, alt_width, target_lane, 1.0)
+
+func _maybe_spawn_branch_hazard(x: float, y: float, width: float, lane_delta: int) -> bool:
+	if width < 190.0:
+		return false
+	var spawn_chance: float = 0.50 + (0.06 * float(lane_delta - 1))
+	if rift_active:
+		spawn_chance += 0.08
+	if rng.randf() > clampf(spawn_chance, 0.40, 0.72):
+		return false
+	var hx: float = _hazard_x(x, width, rng.randf_range(HAZARD_BRANCH_MIN_RATIO, HAZARD_BRANCH_MAX_RATIO))
+	_spawn_hazard_at(Vector2(hx, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
+	return true
 
 func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int, override_chance: float = -1.0) -> bool:
 	if lane > 2:
