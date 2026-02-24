@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.21"
+const BUILD_VERSION: String = "build-1.2.22"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -66,6 +66,9 @@ const ABILITY_PICKUP_BASE_CHANCE: float = 0.075
 const ABILITY_COOLDOWN_SECONDS: float = 16.0
 const SHIELD_HITS_GRANTED: int = 1
 const CHRONO_DURATION: float = 5.5
+const HEALTH_COLOR_SAFE: Color = Color(0.88, 1.0, 0.88)
+const HEALTH_COLOR_WARN: Color = Color(1.0, 0.92, 0.52)
+const HEALTH_COLOR_CRIT: Color = Color(1.0, 0.52, 0.52)
 
 const LANE_Y: Array[float] = [456.0, 314.0, 176.0]
 const SECTION_COLORS: Array[Color] = [
@@ -189,7 +192,7 @@ func _ready() -> void:
 	_apply_biome_for_section(0, false)
 	_apply_section_theme(0)
 	score_label.text = "Score: 0"
-	health_label.text = "Health: %d" % health
+	_refresh_health_label()
 	status_label.text = "Status: SKY-FORGE DOCK"
 	mission_label.text = _mission_text()
 	_refresh_info_label()
@@ -782,25 +785,33 @@ func _create_coin(pos: Vector2) -> Area2D:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 10.0
+	circle.radius = 11.0
 	shape.shape = circle
 	area.add_child(shape)
 
 	var sprite: Polygon2D = Polygon2D.new()
 	sprite.polygon = PackedVector2Array([
-		Vector2(-10, 0), Vector2(0, -10), Vector2(10, 0), Vector2(0, 10)
+		Vector2(-11, 0), Vector2(0, -11), Vector2(11, 0), Vector2(0, 11)
 	])
-	sprite.color = Color(1.0, 0.88, 0.30)
+	sprite.color = Color(1.0, 0.90, 0.28)
 	sprite.set_meta("is_coin_core", true)
 	area.add_child(sprite)
 
 	var ring: Polygon2D = Polygon2D.new()
 	ring.polygon = PackedVector2Array([
-		Vector2(-12, 0), Vector2(0, -12), Vector2(12, 0), Vector2(0, 12)
+		Vector2(-14, 0), Vector2(0, -14), Vector2(14, 0), Vector2(0, 14)
 	])
-	ring.color = Color(1.0, 0.98, 0.64, 0.34)
+	ring.color = Color(1.0, 0.98, 0.64, 0.42)
 	ring.set_meta("is_coin_ring", true)
 	area.add_child(ring)
+
+	var glint: Polygon2D = Polygon2D.new()
+	glint.polygon = PackedVector2Array([
+		Vector2(-1, -8), Vector2(2, -8), Vector2(1, -3), Vector2(-2, -3)
+	])
+	glint.color = Color(1.0, 1.0, 0.92, 0.86)
+	glint.set_meta("is_coin_glint", true)
+	area.add_child(glint)
 
 	area.body_entered.connect(_on_coin_body_entered.bind(area))
 	return area
@@ -812,25 +823,34 @@ func _create_big_coin(pos: Vector2) -> Area2D:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 15.0
+	circle.radius = 16.0
 	shape.shape = circle
 	area.add_child(shape)
 
 	var sprite: Polygon2D = Polygon2D.new()
 	sprite.polygon = PackedVector2Array([
-		Vector2(-14, 0), Vector2(0, -14), Vector2(14, 0), Vector2(0, 14)
+		Vector2(-15, 0), Vector2(0, -15), Vector2(15, 0), Vector2(0, 15)
 	])
-	sprite.color = Color(1.0, 0.65, 0.12)
+	sprite.color = Color(1.0, 0.68, 0.10)
 	sprite.set_meta("is_big_coin_core", true)
 	area.add_child(sprite)
 
 	var ring: Polygon2D = Polygon2D.new()
 	ring.polygon = PackedVector2Array([
-		Vector2(-18, 0), Vector2(0, -18), Vector2(18, 0), Vector2(0, 18)
+		Vector2(-20, 0), Vector2(0, -20), Vector2(20, 0), Vector2(0, 20)
 	])
-	ring.color = Color(1.0, 0.82, 0.42, 0.42)
+	ring.color = Color(1.0, 0.84, 0.45, 0.48)
 	ring.set_meta("is_big_coin_ring", true)
 	area.add_child(ring)
+
+	var star: Polygon2D = Polygon2D.new()
+	star.polygon = PackedVector2Array([
+		Vector2(0, -8), Vector2(2, -2), Vector2(8, -2), Vector2(3, 1), Vector2(5, 7),
+		Vector2(0, 3), Vector2(-5, 7), Vector2(-3, 1), Vector2(-8, -2), Vector2(-2, -2)
+	])
+	star.color = Color(1.0, 0.98, 0.84, 0.88)
+	star.set_meta("is_big_coin_star", true)
+	area.add_child(star)
 
 	area.body_entered.connect(_on_big_coin_body_entered.bind(area))
 	return area
@@ -841,7 +861,7 @@ func _create_hazard(pos: Vector2) -> Area2D:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 10.0
+	circle.radius = 9.0
 	shape.shape = circle
 	area.add_child(shape)
 
@@ -849,8 +869,15 @@ func _create_hazard(pos: Vector2) -> Area2D:
 	base.polygon = PackedVector2Array([
 		Vector2(-14, 11), Vector2(14, 11), Vector2(10, 16), Vector2(-10, 16)
 	])
-	base.color = Color(0.18, 0.15, 0.14)
+	base.color = Color(0.22, 0.17, 0.16)
 	area.add_child(base)
+
+	var danger_ring: Polygon2D = Polygon2D.new()
+	danger_ring.polygon = PackedVector2Array([
+		Vector2(-16, 10), Vector2(0, -20), Vector2(16, 10), Vector2(11, 16), Vector2(-11, 16)
+	])
+	danger_ring.color = Color(1.0, 0.36, 0.20, 0.22)
+	area.add_child(danger_ring)
 
 	var flame_outer: Polygon2D = Polygon2D.new()
 	flame_outer.polygon = PackedVector2Array([
@@ -1115,7 +1142,7 @@ func _animate_runtime_visuals() -> void:
 
 func _refresh_score_label() -> void:
 	var combo_mult: float = 1.0 + (float(combo_count) * 0.08)
-	score_label.text = "Score: %d | Pace x%.1f | Combo x%.2f" % [_current_score(), _speed_multiplier(), combo_mult]
+	score_label.text = "Score: %d | Pace x%.1f | Combo x%.2f | Coins %d" % [_current_score(), _speed_multiplier(), combo_mult, total_coins_collected]
 
 func _register_combo(step: int, reason: String = "", show_notice: bool = false) -> void:
 	if step <= 0:
@@ -1374,7 +1401,16 @@ func _mission_text() -> String:
 
 func _apply_health_delta(delta: int) -> void:
 	health = clampi(health + delta, 0, MAX_HEALTH)
+	_refresh_health_label()
+
+func _refresh_health_label() -> void:
 	health_label.text = "Health: %d" % health
+	if health <= 1:
+		health_label.modulate = HEALTH_COLOR_CRIT
+	elif health == 2:
+		health_label.modulate = HEALTH_COLOR_WARN
+	else:
+		health_label.modulate = HEALTH_COLOR_SAFE
 
 func _increment_pace_level(amount: int, reason: String) -> void:
 	var pace_level: int = player.add_pace_levels(amount)
@@ -1399,7 +1435,7 @@ func _compute_health_spawn_chance() -> float:
 	return clampf(chance, 0.04, 0.90)
 
 func _base_info_text() -> String:
-	var text: String = "Mode: %s | Biome: %s | Plates: up=up-through | up+down=drop-through (Down+Jump) | diamond=ghost | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
+	var text: String = "Mode: %s | Biome: %s | Plates: cyan=up-through, amber=drop-through (Down+Jump), violet=ghost | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
 	if rift_active and rift_event_type != RiftEventType.NONE:
 		text += " | Event: %s %d/%d" % [rift_event_name, rift_event_progress, rift_event_target]
 	return text
