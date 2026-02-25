@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.23"
+const BUILD_VERSION: String = "build-1.2.24"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -74,6 +74,7 @@ const LANE_Y: Array[float] = [468.0, 306.0, 144.0]
 const HAZARD_EDGE_CLEARANCE: float = 84.0
 const HAZARD_BRANCH_MIN_RATIO: float = 0.42
 const HAZARD_BRANCH_MAX_RATIO: float = 0.66
+const ECON_SECTION_DIFFICULTY_STEP: float = 0.0015
 const SECTION_COLORS: Array[Color] = [
 	Color(0.03, 0.05, 0.08), # Forge dusk
 	Color(0.05, 0.09, 0.15), # Reactor blue
@@ -562,8 +563,11 @@ func _add_platform_rule_markers(body: StaticBody2D, width: float, platform_type:
 			body.add_child(ring)
 
 func _place_coins(x: float, y: float, width: float, lane: int) -> void:
-	var count: int = 4 + int(width / 180.0) + int(_current_biome().get("coin_bonus", 0))
-	count = clampi(count, 3, 9)
+	var biome_bonus: int = int(_current_biome().get("coin_bonus", 0))
+	var lane_bonus: int = 1 if lane > 0 else 0
+	var pace_bonus: int = int(floor(float(player.get_pace_level()) / 3.0))
+	var count: int = 3 + int(width / 200.0) + biome_bonus + lane_bonus + pace_bonus
+	count = clampi(count, 3, 10)
 	var coin_y: float = y - 56.0
 	if lane >= 2:
 		coin_y = y - 46.0
@@ -580,7 +584,10 @@ func _maybe_place_big_coin(x: float, y: float, width: float, lane: int, chance: 
 		return
 	if width < 240.0:
 		return
-	var adjusted_chance: float = chance + (float(_current_biome().get("coin_bonus", 0)) * 0.015)
+	var biome_bonus: float = float(_current_biome().get("coin_bonus", 0)) * 0.015
+	var lane_bonus: float = 0.06 if lane >= 2 else 0.03
+	var pace_bonus: float = minf(0.05, float(player.get_pace_level()) * 0.006)
+	var adjusted_chance: float = chance + biome_bonus + lane_bonus + pace_bonus
 	if rng.randf() > adjusted_chance:
 		return
 	var bx: float = x + rng.randf_range(width * 0.35, width * 0.72)
@@ -764,8 +771,13 @@ func _maybe_spawn_branch_hazard(x: float, y: float, width: float, lane_delta: in
 func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int, override_chance: float = -1.0) -> bool:
 	if lane > 2:
 		return false
-	var pace_bonus_chance: float = float(player.get_pace_level()) * 0.006
-	var spawn_chance: float = minf(SPEED_PICKUP_MAX_CHANCE, SPEED_PICKUP_CHANCE + pace_bonus_chance)
+	var pace_level: int = player.get_pace_level()
+	var pace_bonus_chance: float = maxf(0.0, float(pace_level - 2)) * 0.006
+	var section_penalty: float = minf(0.025, float(current_section) * ECON_SECTION_DIFFICULTY_STEP)
+	var spawn_chance: float = SPEED_PICKUP_CHANCE + pace_bonus_chance - section_penalty
+	if pace_level <= 2:
+		spawn_chance *= 0.45
+	spawn_chance = clampf(spawn_chance, 0.008, SPEED_PICKUP_MAX_CHANCE)
 	if override_chance >= 0.0:
 		spawn_chance = override_chance
 	if rng.randf() > spawn_chance:
@@ -1438,12 +1450,14 @@ func _increment_pace_level(amount: int, reason: String) -> void:
 func _compute_health_spawn_chance() -> float:
 	var health_missing: int = MAX_HEALTH - health
 	var pace_level: int = player.get_pace_level()
-	var difficulty_penalty: float = minf(0.34, float(mission_tier - 1) * 0.018 + float(current_section) * 0.013)
+	var difficulty_penalty: float = minf(0.36, float(mission_tier - 1) * 0.020 + float(current_section) * 0.014)
 	var pressure_bonus: float = float(health_missing) * 0.135
 	var critical_bonus: float = 0.30 if health <= 1 else (0.14 if health == 2 else 0.0)
-	var pace_bonus: float = float(pace_level) * 0.012
+	var pace_bonus: float = float(pace_level) * 0.010
+	var coins_to_next_heart: int = maxi(0, next_bonus_heart_at - total_coins_collected)
+	var economy_pressure_bonus: float = 0.05 if (health <= 2 and coins_to_next_heart > 65) else 0.0
 	var rift_penalty: float = 0.06 if rift_active else 0.0
-	var chance: float = 0.09 + pressure_bonus + critical_bonus + pace_bonus - difficulty_penalty - rift_penalty
+	var chance: float = 0.09 + pressure_bonus + critical_bonus + pace_bonus + economy_pressure_bonus - difficulty_penalty - rift_penalty
 
 	# "Pity" protection: at critical health on repeated dangerous routes, force a spawn.
 	if health <= 1 and danger_routes_since_health >= 2:
@@ -1451,7 +1465,7 @@ func _compute_health_spawn_chance() -> float:
 	if health == 2 and danger_routes_since_health >= 4:
 		return 0.95
 
-	return clampf(chance, 0.04, 0.90)
+	return clampf(chance, 0.04, 0.85)
 
 func _base_info_text() -> String:
 	var text: String = "Mode: %s | Biome: %s | Plates: cyan=up-through, amber=drop-through (Down+Jump), violet=ghost | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
