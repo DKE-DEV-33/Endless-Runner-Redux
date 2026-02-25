@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.24"
+const BUILD_VERSION: String = "build-1.2.25"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -75,6 +75,9 @@ const HAZARD_EDGE_CLEARANCE: float = 84.0
 const HAZARD_BRANCH_MIN_RATIO: float = 0.42
 const HAZARD_BRANCH_MAX_RATIO: float = 0.66
 const ECON_SECTION_DIFFICULTY_STEP: float = 0.0015
+const HAZARD_CHASER_CHANCE: float = 0.14
+const HAZARD_CHASER_MIN_SPEED: float = 165.0
+const HAZARD_CHASER_MAX_SPEED: float = 245.0
 const SECTION_COLORS: Array[Color] = [
 	Color(0.03, 0.05, 0.08), # Forge dusk
 	Color(0.05, 0.09, 0.15), # Reactor blue
@@ -230,7 +233,7 @@ func _process(delta: float) -> void:
 	_check_hazard_dodges()
 	_update_combo_timeout()
 	_update_rift_event_progress()
-	_animate_runtime_visuals()
+	_animate_runtime_visuals(delta)
 	_ensure_music_playing()
 	_refresh_info_label()
 
@@ -399,19 +402,9 @@ func _create_platform(x: float, y: float, width: float, platform_type: int) -> S
 		Vector2(width * 0.5, PLATFORM_THICKNESS * 0.5),
 		Vector2(-width * 0.5, PLATFORM_THICKNESS * 0.5)
 	])
-	var top_strip_color: Color = Color.WHITE
-	if platform_type == PlatformType.GHOST:
-		visual.color = Color(0.38, 0.35, 0.58, 0.55)
-		top_strip_color = Color(0.84, 0.72, 1.0, 0.65)
-	elif platform_type == PlatformType.DROP_THROUGH:
-		visual.color = Color(0.64, 0.45, 0.19)
-		top_strip_color = Color(1.0, 0.84, 0.30)
-	elif platform_type == PlatformType.ONE_WAY_UP:
-		visual.color = Color(0.20, 0.49, 0.66)
-		top_strip_color = Color(0.50, 0.94, 1.0)
-	else:
-		visual.color = Color(0.36, 0.42, 0.52)
-		top_strip_color = Color(0.68, 0.84, 0.98)
+	var palette: Dictionary = _platform_palette(platform_type)
+	var top_strip_color: Color = palette.get("trim", Color.WHITE)
+	visual.color = palette.get("base", Color(0.36, 0.42, 0.52))
 	body.add_child(visual)
 
 	var top_strip: Polygon2D = Polygon2D.new()
@@ -447,6 +440,54 @@ func _create_platform(x: float, y: float, width: float, platform_type: int) -> S
 		_add_platform_rule_markers(body, width, platform_type)
 
 	return body
+
+func _platform_palette(platform_type: int) -> Dictionary:
+	# Biome-driven material palette keeps each zone visually distinct.
+	var solid_base: Color
+	var solid_trim: Color
+	var up_base: Color
+	var up_trim: Color
+	var drop_base: Color
+	var drop_trim: Color
+	var ghost_base: Color
+	var ghost_trim: Color
+
+	match current_biome_index:
+		0: # Foundry Rim: steel + cyan optics
+			solid_base = Color(0.37, 0.41, 0.47)
+			solid_trim = Color(0.70, 0.82, 0.92)
+			up_base = Color(0.18, 0.48, 0.63)
+			up_trim = Color(0.56, 0.95, 1.0)
+			drop_base = Color(0.60, 0.43, 0.20)
+			drop_trim = Color(1.0, 0.86, 0.34)
+			ghost_base = Color(0.38, 0.34, 0.57, 0.56)
+			ghost_trim = Color(0.87, 0.75, 1.0, 0.68)
+		1: # Rift Span: colder alloys + blue/plasma tones
+			solid_base = Color(0.28, 0.36, 0.50)
+			solid_trim = Color(0.60, 0.84, 1.0)
+			up_base = Color(0.16, 0.41, 0.66)
+			up_trim = Color(0.50, 0.90, 1.0)
+			drop_base = Color(0.43, 0.36, 0.24)
+			drop_trim = Color(0.96, 0.84, 0.46)
+			ghost_base = Color(0.45, 0.33, 0.66, 0.58)
+			ghost_trim = Color(0.92, 0.80, 1.0, 0.70)
+		_: # Ember Vault: warmer iron + ember accents
+			solid_base = Color(0.44, 0.36, 0.34)
+			solid_trim = Color(0.90, 0.78, 0.60)
+			up_base = Color(0.28, 0.50, 0.56)
+			up_trim = Color(0.62, 0.94, 0.95)
+			drop_base = Color(0.64, 0.38, 0.19)
+			drop_trim = Color(1.0, 0.78, 0.33)
+			ghost_base = Color(0.45, 0.30, 0.52, 0.58)
+			ghost_trim = Color(0.94, 0.74, 0.94, 0.70)
+
+	if platform_type == PlatformType.GHOST:
+		return {"base": ghost_base, "trim": ghost_trim}
+	if platform_type == PlatformType.DROP_THROUGH:
+		return {"base": drop_base, "trim": drop_trim}
+	if platform_type == PlatformType.ONE_WAY_UP:
+		return {"base": up_base, "trim": up_trim}
+	return {"base": solid_base, "trim": solid_trim}
 
 func _add_platform_surface_details(body: StaticBody2D, width: float, base_color: Color, trim_color: Color) -> void:
 	var panel_count: int = maxi(1, mini(10, int(width / PLATFORM_PANEL_GAP)))
@@ -624,6 +665,9 @@ func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 	else:
 		_spawn_hazard_gate(x, y, width)
 
+	if width > 300.0 and rng.randf() < HAZARD_CHASER_CHANCE:
+		_spawn_hazard_chaser(x, y, width)
+
 	if rift_active and width > 320.0 and rng.randf() < 0.45:
 		var spike_x: float = x + rng.randf_range(120.0, width - 90.0)
 		_spawn_hazard_at(Vector2(spike_x, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
@@ -661,6 +705,14 @@ func _spawn_hazard_at(pos: Vector2) -> void:
 	var hazard: Area2D = _create_hazard(pos)
 	hazards.append(hazard)
 	add_child(hazard)
+
+func _spawn_hazard_chaser(x: float, y: float, width: float) -> void:
+	var spawn_x: float = _hazard_x(x, width, 0.86)
+	var spawn_y: float = y - (PLATFORM_THICKNESS * 0.5) - 22.0
+	var speed: float = rng.randf_range(HAZARD_CHASER_MIN_SPEED, HAZARD_CHASER_MAX_SPEED)
+	var chaser: Area2D = _create_hazard_chaser(Vector2(spawn_x, spawn_y), speed)
+	hazards.append(chaser)
+	add_child(chaser)
 
 func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, chance: float = 0.18) -> bool:
 	if lane > 2:
@@ -929,23 +981,79 @@ func _create_hazard(pos: Vector2) -> Area2D:
 	area.body_entered.connect(_on_hazard_body_entered)
 	return area
 
+func _create_hazard_chaser(pos: Vector2, speed: float) -> Area2D:
+	var area: Area2D = Area2D.new()
+	area.position = pos
+	area.set_meta("hazard_kind", "chaser")
+	area.set_meta("move_speed", speed)
+	area.set_meta("base_y", pos.y)
+	area.set_meta("phase", rng.randf_range(0.0, TAU))
+
+	var shape: CollisionShape2D = CollisionShape2D.new()
+	var circle: CircleShape2D = CircleShape2D.new()
+	circle.radius = 11.0
+	shape.shape = circle
+	area.add_child(shape)
+
+	var core: Polygon2D = Polygon2D.new()
+	core.polygon = PackedVector2Array([
+		Vector2(-12, 0), Vector2(-5, -9), Vector2(5, -9), Vector2(12, 0), Vector2(5, 9), Vector2(-5, 9)
+	])
+	core.color = Color(0.92, 0.34, 0.20, 0.96)
+	core.set_meta("is_chaser_core", true)
+	area.add_child(core)
+
+	var eye: Polygon2D = Polygon2D.new()
+	eye.polygon = PackedVector2Array([
+		Vector2(-5, -2), Vector2(5, -2), Vector2(5, 2), Vector2(-5, 2)
+	])
+	eye.color = Color(1.0, 0.90, 0.40, 0.96)
+	eye.set_meta("is_chaser_eye", true)
+	area.add_child(eye)
+
+	var trail: Polygon2D = Polygon2D.new()
+	trail.polygon = PackedVector2Array([
+		Vector2(10, -7), Vector2(19, -3), Vector2(19, 3), Vector2(10, 7)
+	])
+	trail.color = Color(1.0, 0.46, 0.22, 0.40)
+	trail.set_meta("is_chaser_trail", true)
+	area.add_child(trail)
+
+	area.body_entered.connect(_on_hazard_body_entered)
+	return area
+
 func _create_speed_pickup(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
 	area.position = pos
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 12.0
+	circle.radius = 15.0
 	shape.shape = circle
 	area.add_child(shape)
 
-	var body_poly: Polygon2D = Polygon2D.new()
-	body_poly.polygon = PackedVector2Array([
-		Vector2(-10, 0), Vector2(-2, -10), Vector2(8, -10),
-		Vector2(2, 0), Vector2(10, 0), Vector2(0, 12), Vector2(-8, 12)
+	var ring: Polygon2D = Polygon2D.new()
+	ring.polygon = PackedVector2Array([
+		Vector2(-15, 0), Vector2(0, -15), Vector2(15, 0), Vector2(0, 15)
 	])
-	body_poly.color = Color(0.34, 0.76, 1.0)
-	area.add_child(body_poly)
+	ring.color = Color(0.28, 0.78, 1.0, 0.88)
+	area.add_child(ring)
+
+	var core: Polygon2D = Polygon2D.new()
+	core.polygon = PackedVector2Array([
+		Vector2(-11, 0), Vector2(0, -11), Vector2(11, 0), Vector2(0, 11)
+	])
+	core.color = Color(0.08, 0.34, 0.52, 0.96)
+	core.set_meta("is_speed_core", true)
+	area.add_child(core)
+
+	var minus: Polygon2D = Polygon2D.new()
+	minus.polygon = PackedVector2Array([
+		Vector2(-7, -2), Vector2(7, -2), Vector2(7, 2), Vector2(-7, 2)
+	])
+	minus.color = Color(0.86, 0.98, 1.0)
+	minus.set_meta("is_speed_minus", true)
+	area.add_child(minus)
 
 	area.body_entered.connect(_on_speed_pickup_body_entered.bind(area))
 	return area
@@ -957,13 +1065,13 @@ func _create_ability_pickup(pos: Vector2, ability_kind: int) -> Area2D:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 13.0
+	circle.radius = 16.0
 	shape.shape = circle
 	area.add_child(shape)
 
 	var ring: Polygon2D = Polygon2D.new()
 	ring.polygon = PackedVector2Array([
-		Vector2(-12, 0), Vector2(0, -12), Vector2(12, 0), Vector2(0, 12)
+		Vector2(-15, 0), Vector2(0, -15), Vector2(15, 0), Vector2(0, 15)
 	])
 	if ability_kind == AbilityType.SHIELD:
 		ring.color = Color(0.54, 0.93, 1.0, 0.82)
@@ -974,14 +1082,16 @@ func _create_ability_pickup(pos: Vector2, ability_kind: int) -> Area2D:
 	var core: Polygon2D = Polygon2D.new()
 	if ability_kind == AbilityType.SHIELD:
 		core.polygon = PackedVector2Array([
-			Vector2(-5, -2), Vector2(0, -8), Vector2(5, -2), Vector2(3, 6), Vector2(-3, 6)
+			Vector2(-6, -3), Vector2(0, -10), Vector2(6, -3), Vector2(4, 7), Vector2(-4, 7)
 		])
 		core.color = Color(0.84, 0.98, 1.0)
 	else:
+		# Hourglass silhouette is clearer than a tiny lightning bolt.
 		core.polygon = PackedVector2Array([
-			Vector2(-4, -8), Vector2(1, -3), Vector2(-1, 2), Vector2(5, 2), Vector2(-2, 10), Vector2(0, 4), Vector2(-6, 4)
+			Vector2(-6, -9), Vector2(6, -9), Vector2(2, -3), Vector2(-2, -3),
+			Vector2(-2, 3), Vector2(2, 3), Vector2(6, 9), Vector2(-6, 9)
 		])
-		core.color = Color(1.0, 0.95, 0.72)
+		core.color = Color(1.0, 0.95, 0.74)
 	area.add_child(core)
 
 	area.body_entered.connect(_on_ability_pickup_body_entered.bind(area))
@@ -993,18 +1103,25 @@ func _create_health_pickup(pos: Vector2) -> Area2D:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 12.0
+	circle.radius = 15.0
 	shape.shape = circle
 	area.add_child(shape)
 
 	var core: Polygon2D = Polygon2D.new()
 	core.polygon = PackedVector2Array([
-		Vector2(-10, -4), Vector2(-4, -4), Vector2(-4, -10), Vector2(4, -10),
-		Vector2(4, -4), Vector2(10, -4), Vector2(10, 4), Vector2(4, 4),
-		Vector2(4, 10), Vector2(-4, 10), Vector2(-4, 4), Vector2(-10, 4)
+		Vector2(-12, -5), Vector2(-5, -5), Vector2(-5, -12), Vector2(5, -12),
+		Vector2(5, -5), Vector2(12, -5), Vector2(12, 5), Vector2(5, 5),
+		Vector2(5, 12), Vector2(-5, 12), Vector2(-5, 5), Vector2(-12, 5)
 	])
 	core.color = Color(0.40, 0.96, 0.50)
 	area.add_child(core)
+
+	var ring: Polygon2D = Polygon2D.new()
+	ring.polygon = PackedVector2Array([
+		Vector2(-16, 0), Vector2(0, -16), Vector2(16, 0), Vector2(0, 16)
+	])
+	ring.color = Color(0.70, 1.0, 0.76, 0.42)
+	area.add_child(ring)
 
 	area.body_entered.connect(_on_health_pickup_body_entered.bind(area))
 	return area
@@ -1141,7 +1258,7 @@ func _cleanup_old() -> void:
 			ability_pickups.erase(ap)
 			ap.queue_free()
 
-func _animate_runtime_visuals() -> void:
+func _animate_runtime_visuals(delta: float) -> void:
 	var phase: float = run_seconds * 5.8
 
 	for coin: Area2D in coins:
@@ -1162,6 +1279,12 @@ func _animate_runtime_visuals() -> void:
 	for hazard: Area2D in hazards:
 		if not is_instance_valid(hazard):
 			continue
+		if String(hazard.get_meta("hazard_kind", "")) == "chaser":
+			var move_speed: float = float(hazard.get_meta("move_speed", HAZARD_CHASER_MIN_SPEED))
+			var h_phase: float = float(hazard.get_meta("phase", 0.0))
+			var h_base_y: float = float(hazard.get_meta("base_y", hazard.position.y))
+			hazard.position.x -= move_speed * delta
+			hazard.position.y = h_base_y + (sin((run_seconds * 3.8) + h_phase) * 8.0)
 		var flicker: float = 1.0 + (sin((phase * 1.8) + hazard.global_position.x * 0.02) * 0.08)
 		for node: Node in hazard.get_children():
 			if node is Polygon2D:
@@ -1170,6 +1293,30 @@ func _animate_runtime_visuals() -> void:
 					poly.scale = Vector2(flicker, 1.0 + (flicker - 1.0) * 1.7)
 				elif bool(poly.get_meta("is_flame_inner", false)):
 					poly.scale = Vector2(flicker * 0.95, 1.0 + (flicker - 1.0) * 2.0)
+				elif bool(poly.get_meta("is_chaser_core", false)):
+					poly.rotation = sin((phase * 1.2) + hazard.global_position.x * 0.01) * 0.08
+				elif bool(poly.get_meta("is_chaser_eye", false)):
+					poly.scale = Vector2(1.0 + (flicker - 1.0) * 1.8, 1.0)
+				elif bool(poly.get_meta("is_chaser_trail", false)):
+					poly.scale = Vector2(1.0 + (flicker - 1.0) * 2.4, 1.0)
+
+	for pickup: Area2D in speed_pickups:
+		if not is_instance_valid(pickup):
+			continue
+		pickup.rotation = sin((phase * 0.9) + pickup.global_position.x * 0.008) * 0.10
+		pickup.scale = Vector2.ONE * (1.0 + (sin((phase * 1.4) + pickup.global_position.x * 0.01) * 0.05))
+
+	for pickup: Area2D in health_pickups:
+		if not is_instance_valid(pickup):
+			continue
+		pickup.rotation = sin((phase * 0.7) + pickup.global_position.x * 0.007) * 0.08
+		pickup.scale = Vector2.ONE * (1.0 + (sin((phase * 1.1) + pickup.global_position.x * 0.012) * 0.05))
+
+	for pickup: Area2D in ability_pickups:
+		if not is_instance_valid(pickup):
+			continue
+		pickup.rotation = sin((phase * 0.8) + pickup.global_position.x * 0.009) * 0.14
+		pickup.scale = Vector2.ONE * (1.0 + (sin((phase * 1.3) + pickup.global_position.x * 0.008) * 0.04))
 
 func _refresh_score_label() -> void:
 	var combo_mult: float = 1.0 + (float(combo_count) * 0.08)
@@ -1468,7 +1615,7 @@ func _compute_health_spawn_chance() -> float:
 	return clampf(chance, 0.04, 0.85)
 
 func _base_info_text() -> String:
-	var text: String = "Mode: %s | Biome: %s | Plates: cyan=up-through, amber=drop-through (Down+Jump), violet=ghost | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
+	var text: String = "Mode: %s | Biome: %s | Plates: cyan=up-through, amber=drop-through (Down+Jump), violet=ghost | Pickups: teal ring=pace -, green plus=HP, blue/yellow sigils=abilities | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
 	if rift_active and rift_event_type != RiftEventType.NONE:
 		text += " | Event: %s %d/%d" % [rift_event_name, rift_event_progress, rift_event_target]
 	return text
@@ -1983,6 +2130,14 @@ func _update_parallax_layers() -> void:
 func _tint_parallax_layers(base_color: Color) -> void:
 	if parallax_layers.is_empty():
 		return
+	var biome_tint: Color = Color(0.56, 0.68, 0.82)
+	var biome_mix: float = 0.46
+	if current_biome_index == 1:
+		biome_tint = Color(0.48, 0.72, 1.0)
+		biome_mix = 0.54
+	elif current_biome_index == 2:
+		biome_tint = Color(0.90, 0.56, 0.30)
+		biome_mix = 0.50
 	for layer_info: Dictionary in parallax_layers:
 		var layer: Node2D = layer_info["node"]
 		var factor: float = float(layer_info["factor"])
@@ -1992,9 +2147,15 @@ func _tint_parallax_layers(base_color: Color) -> void:
 			if piece is Polygon2D:
 				var poly: Polygon2D = piece
 				var original: Color = poly.color
+				var mixed: Color = Color(
+					clampf((original.r * (1.0 - biome_mix)) + (tint.r * biome_mix), 0.0, 1.0),
+					clampf((original.g * (1.0 - biome_mix)) + (tint.g * biome_mix), 0.0, 1.0),
+					clampf((original.b * (1.0 - biome_mix)) + (tint.b * biome_mix), 0.0, 1.0),
+					original.a
+				)
 				poly.color = Color(
-					clampf((original.r * 0.55) + (tint.r * 0.45), 0.0, 1.0),
-					clampf((original.g * 0.55) + (tint.g * 0.45), 0.0, 1.0),
-					clampf((original.b * 0.55) + (tint.b * 0.45), 0.0, 1.0),
+					clampf((mixed.r * 0.65) + (biome_tint.r * 0.35), 0.0, 1.0),
+					clampf((mixed.g * 0.65) + (biome_tint.g * 0.35), 0.0, 1.0),
+					clampf((mixed.b * 0.65) + (biome_tint.b * 0.35), 0.0, 1.0),
 					original.a
 				)
