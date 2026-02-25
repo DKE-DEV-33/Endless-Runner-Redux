@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.25"
+const BUILD_VERSION: String = "build-1.2.26"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -102,6 +102,7 @@ const GAMEPLAY_MUSIC_PATH: String = "res://assets/audio/gameplay_music.mp3"
 @onready var status_label: Label = $CanvasLayer/StatusLabel
 @onready var mission_label: Label = $CanvasLayer/MissionLabel
 @onready var info_label: Label = $CanvasLayer/InfoLabel
+@onready var legend_label: Label = $CanvasLayer/LegendLabel
 @onready var version_label: Label = $CanvasLayer/VersionLabel
 @onready var pause_layer: CanvasLayer = $PauseLayer
 @onready var pause_backdrop: ColorRect = $PauseLayer/PauseBackdrop
@@ -110,6 +111,7 @@ const GAMEPLAY_MUSIC_PATH: String = "res://assets/audio/gameplay_music.mp3"
 @onready var resume_button: Button = $PauseLayer/PausePanel/VBox/ResumeButton
 @onready var restart_button: Button = $PauseLayer/PausePanel/VBox/RestartButton
 @onready var menu_button: Button = $PauseLayer/PausePanel/VBox/MenuButton
+@onready var pause_legend_label: Label = $PauseLayer/PausePanel/VBox/LegendPauseLabel
 @onready var master_slider: HSlider = $PauseLayer/PausePanel/VBox/MasterSlider
 @onready var sfx_slider: HSlider = $PauseLayer/PausePanel/VBox/SfxSlider
 
@@ -203,6 +205,7 @@ func _ready() -> void:
 	status_label.text = "Status: SKY-FORGE DOCK"
 	mission_label.text = _mission_text()
 	_refresh_info_label()
+	_refresh_legend_text()
 	_set_info_notice("Rule plates: up arrow=up-through | up+down=drop-through | diamond=ghost", 6.0)
 	version_label.text = "Version: %s" % BUILD_VERSION
 	_setup_pause_ui()
@@ -640,12 +643,14 @@ func _maybe_place_big_coin(x: float, y: float, width: float, lane: int, chance: 
 func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 	if lane > 2:
 		return false
+	var pace_level: int = player.get_pace_level()
 	var hazard_mult: float = float(_current_biome().get("hazard_mult", 1.0))
-	var skip_chance: float = clampf(0.5 / hazard_mult, 0.18, 0.72)
+	var skip_chance: float = clampf((0.5 / hazard_mult) - (float(pace_level) * 0.02), 0.08, 0.72)
 	if width < 260.0 and rng.randf() < skip_chance:
 		return false
 
-	var segment_hazard_chance: float = clampf(HAZARD_SEGMENT_BASE_CHANCE * hazard_mult, 0.22, 0.80)
+	var pace_bonus: float = minf(0.20, float(pace_level) * 0.03)
+	var segment_hazard_chance: float = clampf((HAZARD_SEGMENT_BASE_CHANCE * hazard_mult) + pace_bonus, 0.24, 0.88)
 	if segments_since_hazard_spawn <= 0:
 		segment_hazard_chance = HAZARD_SEGMENT_COOLDOWN_CHANCE
 	elif segments_since_hazard_spawn >= HAZARD_SEGMENT_PITY_COUNT:
@@ -665,7 +670,8 @@ func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 	else:
 		_spawn_hazard_gate(x, y, width)
 
-	if width > 300.0 and rng.randf() < HAZARD_CHASER_CHANCE:
+	var chaser_chance: float = HAZARD_CHASER_CHANCE + minf(0.14, float(pace_level) * 0.02)
+	if width > 300.0 and rng.randf() < chaser_chance:
 		_spawn_hazard_chaser(x, y, width)
 
 	if rift_active and width > 320.0 and rng.randf() < 0.45:
@@ -944,27 +950,27 @@ func _create_hazard(pos: Vector2) -> Area2D:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 9.0
+	circle.radius = 11.0
 	shape.shape = circle
 	area.add_child(shape)
 
 	var base: Polygon2D = Polygon2D.new()
 	base.polygon = PackedVector2Array([
-		Vector2(-14, 11), Vector2(14, 11), Vector2(10, 16), Vector2(-10, 16)
+		Vector2(-17, 12), Vector2(17, 12), Vector2(12, 19), Vector2(-12, 19)
 	])
 	base.color = Color(0.22, 0.17, 0.16)
 	area.add_child(base)
 
 	var danger_ring: Polygon2D = Polygon2D.new()
 	danger_ring.polygon = PackedVector2Array([
-		Vector2(-16, 10), Vector2(0, -20), Vector2(16, 10), Vector2(11, 16), Vector2(-11, 16)
+		Vector2(-19, 11), Vector2(0, -24), Vector2(19, 11), Vector2(13, 19), Vector2(-13, 19)
 	])
 	danger_ring.color = Color(1.0, 0.36, 0.20, 0.22)
 	area.add_child(danger_ring)
 
 	var flame_outer: Polygon2D = Polygon2D.new()
 	flame_outer.polygon = PackedVector2Array([
-		Vector2(-12, 12), Vector2(-4, -2), Vector2(0, -18), Vector2(5, -2), Vector2(12, 12)
+		Vector2(-14, 14), Vector2(-5, -3), Vector2(0, -22), Vector2(6, -3), Vector2(14, 14)
 	])
 	flame_outer.color = Color(0.96, 0.35, 0.22)
 	flame_outer.set_meta("is_flame_outer", true)
@@ -972,7 +978,7 @@ func _create_hazard(pos: Vector2) -> Area2D:
 
 	var flame_inner: Polygon2D = Polygon2D.new()
 	flame_inner.polygon = PackedVector2Array([
-		Vector2(-6, 10), Vector2(-2, 0), Vector2(0, -10), Vector2(3, 0), Vector2(6, 10)
+		Vector2(-7, 12), Vector2(-2, 1), Vector2(0, -12), Vector2(3, 1), Vector2(7, 12)
 	])
 	flame_inner.color = Color(1.0, 0.80, 0.34)
 	flame_inner.set_meta("is_flame_inner", true)
@@ -1615,7 +1621,7 @@ func _compute_health_spawn_chance() -> float:
 	return clampf(chance, 0.04, 0.85)
 
 func _base_info_text() -> String:
-	var text: String = "Mode: %s | Biome: %s | Plates: cyan=up-through, amber=drop-through (Down+Jump), violet=ghost | Pickups: teal ring=pace -, green plus=HP, blue/yellow sigils=abilities | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
+	var text: String = "Mode: %s | Biome: %s | See top-right legend for rules/pickups | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
 	if rift_active and rift_event_type != RiftEventType.NONE:
 		text += " | Event: %s %d/%d" % [rift_event_name, rift_event_progress, rift_event_target]
 	return text
@@ -1625,6 +1631,23 @@ func _refresh_info_label() -> void:
 	if info_notice != "":
 		text += " | " + info_notice
 	info_label.text = text
+
+func _refresh_legend_text() -> void:
+	var lines: Array[String] = [
+		"Rules",
+		"Cyan plate: jump up through.",
+		"Amber plate: up/down through (Down+Jump).",
+		"Violet plate: no collision (ghost).",
+		"",
+		"Pickups",
+		"Teal ring [-]: reduce pace by 1-2.",
+		"Green plus: restore 1 health.",
+		"Blue sigil: shield next hit.",
+		"Gold sigil: chrono slow-time.",
+	]
+	var legend_text: String = "\n".join(lines)
+	legend_label.text = legend_text
+	pause_legend_label.text = legend_text
 
 func _set_info_notice(message: String, duration: float = INFO_NOTICE_DURATION) -> void:
 	info_notice = message
@@ -1698,6 +1721,7 @@ func _setup_pause_ui() -> void:
 
 	master_slider.value = AudioServer.get_bus_volume_db(0)
 	sfx_slider.value = sfx_volume_db
+	_refresh_legend_text()
 
 func _toggle_pause_menu() -> void:
 	var opening: bool = not pause_panel.visible
@@ -1706,6 +1730,7 @@ func _toggle_pause_menu() -> void:
 	get_tree().paused = opening
 	if opening:
 		pause_status_label.text = "Paused | Score: %d | Pace %d" % [_current_score(), player.get_pace_level()]
+		_refresh_legend_text()
 
 func _on_resume_pressed() -> void:
 	pause_backdrop.visible = false
