@@ -79,9 +79,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -240.0
-offset_top = -196.0
+offset_top = -222.0
 offset_right = 240.0
-offset_bottom = 196.0
+offset_bottom = 222.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("3")
@@ -115,6 +115,13 @@ label_settings = SubResource("2")
 layout_mode = 2
 text = "Best Run: --"
 horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="SummaryLabel" type="Label" parent="Card/Center"]
+layout_mode = 2
+text = "Run Summary: --"
+horizontal_alignment = 1
+autowrap_mode = 2
 label_settings = SubResource("2")
 
 [node name="ModeButton" type="Button" parent="Card/Center"]

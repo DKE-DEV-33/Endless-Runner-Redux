@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.34"
+const BUILD_VERSION: String = "build-1.2.35"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -180,6 +180,8 @@ var mission_type: int = MissionType.COINS
 var mission_no_hit_start_x: float = 0.0
 var encounter_phase: int = EncounterPhase.PLATFORM_CHALLENGE
 var encounter_segments_left: int = 0
+var hazards_dodged: int = 0
+var max_pace_level: int = 0
 
 var platforms: Array[Node2D] = []
 var coins: Array[Area2D] = []
@@ -261,6 +263,7 @@ func _process(delta: float) -> void:
 
 	distance_score = int(player.global_position.x / 12.0)
 	_refresh_score_label()
+	max_pace_level = maxi(max_pace_level, player.get_pace_level())
 
 	if _bootstrap_active():
 		status_label.text = "Status: SKY-FORGE DOCK"
@@ -1471,6 +1474,7 @@ func _check_hazard_dodges() -> void:
 		if absf(hazard.global_position.y - player.global_position.y) > HAZARD_DODGE_Y_WINDOW:
 			continue
 		hazard.set_meta("dodge_scored", true)
+		hazards_dodged += 1
 		_register_combo(1, "Clean dodge", false)
 		if rift_active and rift_event_type == RiftEventType.EMBER_BREAKER:
 			rift_event_progress += 1
@@ -1794,6 +1798,10 @@ func _finish_end_run() -> void:
 	get_tree().set_meta("last_distance_points", _distance_points())
 	get_tree().set_meta("last_pickup_points", pickup_score)
 	get_tree().set_meta("last_risk_points", risk_score)
+	get_tree().set_meta("last_hazards_dodged", hazards_dodged)
+	get_tree().set_meta("last_max_pace", max_pace_level)
+	get_tree().set_meta("last_mission_tier", mission_tier)
+	get_tree().set_meta("last_coins_collected", total_coins_collected)
 	get_tree().set_meta("best_score", best_score)
 	get_tree().set_meta("is_new_best", is_new_best)
 	get_tree().paused = false

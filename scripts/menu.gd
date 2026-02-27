@@ -8,6 +8,7 @@ const WINDOW_SIZES: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900),
 @onready var quit_button: Button = $Card/Center/QuitButton
 @onready var last_score_label: Label = $Card/Center/LastScoreLabel
 @onready var best_score_label: Label = $Card/Center/BestScoreLabel
+@onready var summary_label: Label = $Card/Center/SummaryLabel
 @onready var mode_button: Button = $Card/Center/ModeButton
 @onready var ui_scale_button: Button = $Card/Center/UiScaleButton
 @onready var daily_seed_label: Label = $Card/Center/DailySeedLabel
@@ -65,13 +66,19 @@ func _refresh_score_labels() -> void:
 	var last_distance: int = int(get_tree().get_meta("last_distance_points", 0))
 	var last_pickup: int = int(get_tree().get_meta("last_pickup_points", 0))
 	var last_risk: int = int(get_tree().get_meta("last_risk_points", 0))
+	var last_dodges: int = int(get_tree().get_meta("last_hazards_dodged", 0))
+	var last_max_pace: int = int(get_tree().get_meta("last_max_pace", 0))
+	var last_tier: int = int(get_tree().get_meta("last_mission_tier", 0))
+	var last_coins: int = int(get_tree().get_meta("last_coins_collected", 0))
 	var is_new_best: bool = bool(get_tree().get_meta("is_new_best", false))
 
 	if has_last:
 		var suffix: String = " NEW BEST!" if is_new_best else ""
 		last_score_label.text = "Last Run: %d%s\nD:%d  P:%d  R:%d" % [last_score, suffix, last_distance, last_pickup, last_risk]
+		summary_label.text = "Summary: Coins %d | Dodges %d | Max Pace %d | Directive Tier %d" % [last_coins, last_dodges, last_max_pace, last_tier]
 	else:
 		last_score_label.text = "Last Run: --"
+		summary_label.text = "Summary: --"
 
 	best_score_label.text = "Best Run: %d" % best_score
 
