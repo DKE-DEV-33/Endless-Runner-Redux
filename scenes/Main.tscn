@@ -9,14 +9,12 @@
 size = Vector2(36, 52)
 
 [sub_resource type="LabelSettings" id="2"]
-font = ExtResource("3")
 font_size = 21
 font_color = Color(0.95, 0.98, 1, 1)
 outline_size = 4
 outline_color = Color(0, 0, 0, 0.5)
 
 [sub_resource type="LabelSettings" id="3"]
-font = ExtResource("4")
 font_size = 18
 font_color = Color(0.95, 0.98, 1, 1)
 outline_size = 3
@@ -235,7 +233,6 @@ value = -6.0
 [node name="ResumeButton" type="Button" parent="PauseLayer/PausePanel/VBox"]
 layout_mode = 2
 text = "Resume"
-theme_override_fonts/font = ExtResource("3")
 theme_override_styles/normal = SubResource("5")
 theme_override_styles/hover = SubResource("6")
 theme_override_styles/pressed = SubResource("7")
@@ -243,7 +240,6 @@ theme_override_styles/pressed = SubResource("7")
 [node name="RestartButton" type="Button" parent="PauseLayer/PausePanel/VBox"]
 layout_mode = 2
 text = "Restart Run"
-theme_override_fonts/font = ExtResource("3")
 theme_override_styles/normal = SubResource("5")
 theme_override_styles/hover = SubResource("6")
 theme_override_styles/pressed = SubResource("7")
@@ -251,7 +247,6 @@ theme_override_styles/pressed = SubResource("7")
 [node name="MenuButton" type="Button" parent="PauseLayer/PausePanel/VBox"]
 layout_mode = 2
 text = "Save + Return to Menu"
-theme_override_fonts/font = ExtResource("3")
 theme_override_styles/normal = SubResource("5")
 theme_override_styles/hover = SubResource("6")
 theme_override_styles/pressed = SubResource("7")

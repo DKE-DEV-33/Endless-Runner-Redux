@@ -5,14 +5,12 @@
 [ext_resource type="FontFile" path="res://assets/fonts/Orbitron-Regular.ttf" id="3"]
 
 [sub_resource type="LabelSettings" id="1"]
-font = ExtResource("2")
 font_size = 52
 font_color = Color(0.93, 0.97, 1, 1)
 outline_size = 6
 outline_color = Color(0, 0, 0, 0.6)
 
 [sub_resource type="LabelSettings" id="2"]
-font = ExtResource("3")
 font_size = 30
 font_color = Color(0.55, 0.78, 1, 1)
 outline_size = 4
