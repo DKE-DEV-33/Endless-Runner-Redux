@@ -3,6 +3,10 @@
 [ext_resource type="Script" path="res://scripts/menu.gd" id="1"]
 [ext_resource type="FontFile" path="res://assets/fonts/Orbitron-SemiBold.ttf" id="2"]
 [ext_resource type="FontFile" path="res://assets/fonts/Orbitron-Regular.ttf" id="3"]
+[ext_resource type="Texture2D" path="res://assets/ui_icons/speed_minus.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/ui_icons/health_plus.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/ui_icons/shield.svg" id="7"]
+[ext_resource type="Texture2D" path="res://assets/ui_icons/chrono_hourglass.svg" id="8"]
 
 [sub_resource type="LabelSettings" id="1"]
 font_size = 34
@@ -198,11 +202,107 @@ text = "Rules + Pickups"
 horizontal_alignment = 1
 label_settings = SubResource("1")
 
-[node name="RulesText" type="Label" parent="RulesOverlay/RulesPanel/VBox"]
+[node name="Scroll" type="ScrollContainer" parent="RulesOverlay/RulesPanel/VBox"]
 layout_mode = 2
 size_flags_vertical = 3
-text = "Movement\\n- Space: jump (tap short / hold long)\\n- One air jump before landing\\n- Left/Right: decrease/increase pace\\n- Hold Down: crouch to dodge low threats/pickups\\n\\nPlates\\n- Cyan plate: up-through\\n- Amber plate: pass both ways (Down+Jump to drop)\\n- Violet plate: ghost (no collision)\\n\\nPickups\\n- Teal ring [-]: reduce pace by 1-2\\n- Green plus: restore 1 health\\n- Blue sigil: shield next hit\\n- Gold sigil: chrono slow-time\\n- Big coin: worth 10 coins (mostly at coin-arch apex)\\n\\nHazards\\n- Static flames and moving chasers both cause damage."
+
+[node name="RulesBody" type="VBoxContainer" parent="RulesOverlay/RulesPanel/VBox/Scroll"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Movement" type="Label" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
+layout_mode = 2
 autowrap_mode = 2
+text = "Movement: Space jump (tap/hold), one air jump, Left/Right pace, hold Down crouch."
+label_settings = SubResource("2")
+
+[node name="Plates" type="Label" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Plates: cyan=up-through, amber=drop-through (Down+Jump), violet=ghost/no collision."
+label_settings = SubResource("2")
+
+[node name="ItemsTitle" type="Label" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
+layout_mode = 2
+text = "Items"
+label_settings = SubResource("1")
+
+[node name="ItemRows" type="VBoxContainer" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SpeedRow" type="HBoxContainer" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SpeedIcon" type="TextureRect" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/SpeedRow"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("5")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="SpeedText" type="Label" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/SpeedRow"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Teal ring [-]: reduce pace by 1-2"
+label_settings = SubResource("2")
+
+[node name="HealthRow" type="HBoxContainer" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HealthIcon" type="TextureRect" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/HealthRow"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("6")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HealthText" type="Label" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/HealthRow"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Green plus: restore 1 health"
+label_settings = SubResource("2")
+
+[node name="ShieldRow" type="HBoxContainer" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ShieldIcon" type="TextureRect" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ShieldRow"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("7")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ShieldText" type="Label" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ShieldRow"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Blue sigil: shield the next hit"
+label_settings = SubResource("2")
+
+[node name="ChronoRow" type="HBoxContainer" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ChronoIcon" type="TextureRect" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ChronoRow"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("8")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ChronoText" type="Label" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ChronoRow"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Gold sigil: chrono slow-time"
+label_settings = SubResource("2")
+
+[node name="Hazards" type="Label" parent="RulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Hazards: static flame pillars and moving fireball chasers both damage you."
 label_settings = SubResource("2")
 
 [node name="CloseRulesButton" type="Button" parent="RulesOverlay/RulesPanel/VBox"]

@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.32"
+const BUILD_VERSION: String = "build-1.2.33"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -1906,7 +1906,15 @@ func _load_display_settings() -> void:
 	_apply_window_size(window_size_index)
 
 func _apply_window_size(size_index: int) -> void:
-	get_window().size = WINDOW_SIZES[size_index]
+	var target: Vector2i = WINDOW_SIZES[size_index]
+	var screen_rect: Rect2i = DisplayServer.screen_get_usable_rect()
+	target.x = mini(target.x, screen_rect.size.x)
+	target.y = mini(target.y, screen_rect.size.y)
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_size(target)
+	get_window().size = target
+	var centered: Vector2i = screen_rect.position + ((screen_rect.size - target) / 2)
+	DisplayServer.window_set_position(centered)
 
 func _save_display_settings() -> void:
 	var config: ConfigFile = ConfigFile.new()

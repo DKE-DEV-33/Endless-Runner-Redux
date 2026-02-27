@@ -4,6 +4,10 @@
 [ext_resource type="Script" path="res://scripts/player.gd" id="2"]
 [ext_resource type="FontFile" path="res://assets/fonts/Orbitron-SemiBold.ttf" id="3"]
 [ext_resource type="FontFile" path="res://assets/fonts/Orbitron-Regular.ttf" id="4"]
+[ext_resource type="Texture2D" path="res://assets/ui_icons/speed_minus.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/ui_icons/health_plus.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/ui_icons/shield.svg" id="7"]
+[ext_resource type="Texture2D" path="res://assets/ui_icons/chrono_hourglass.svg" id="8"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(36, 52)
@@ -347,10 +351,12 @@ theme_override_constants/separation = 6
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="SpeedIcon" type="ColorRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/SpeedRow"]
-custom_minimum_size = Vector2(22, 22)
+[node name="SpeedIcon" type="TextureRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/SpeedRow"]
+custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
-color = Color(0.28, 0.78, 1, 1)
+texture = ExtResource("5")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="SpeedText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/SpeedRow"]
 layout_mode = 2
@@ -362,10 +368,12 @@ label_settings = SubResource("3")
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="HealthIcon" type="ColorRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/HealthRow"]
-custom_minimum_size = Vector2(22, 22)
+[node name="HealthIcon" type="TextureRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/HealthRow"]
+custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
-color = Color(0.4, 0.96, 0.5, 1)
+texture = ExtResource("6")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="HealthText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/HealthRow"]
 layout_mode = 2
@@ -377,10 +385,12 @@ label_settings = SubResource("3")
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="ShieldIcon" type="ColorRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ShieldRow"]
-custom_minimum_size = Vector2(22, 22)
+[node name="ShieldIcon" type="TextureRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ShieldRow"]
+custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
-color = Color(0.54, 0.93, 1, 1)
+texture = ExtResource("7")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="ShieldText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ShieldRow"]
 layout_mode = 2
@@ -392,10 +402,12 @@ label_settings = SubResource("3")
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="ChronoIcon" type="ColorRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ChronoRow"]
-custom_minimum_size = Vector2(22, 22)
+[node name="ChronoIcon" type="TextureRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ChronoRow"]
+custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
-color = Color(1, 0.86, 0.42, 1)
+texture = ExtResource("8")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="ChronoText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ChronoRow"]
 layout_mode = 2

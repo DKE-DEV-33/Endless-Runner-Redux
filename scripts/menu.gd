@@ -111,7 +111,15 @@ func _save_display_settings() -> void:
 	config.save(SETTINGS_FILE)
 
 func _apply_window_size(size_index: int) -> void:
-	get_window().size = WINDOW_SIZES[size_index]
+	var target: Vector2i = WINDOW_SIZES[size_index]
+	var screen_rect: Rect2i = DisplayServer.screen_get_usable_rect()
+	target.x = mini(target.x, screen_rect.size.x)
+	target.y = mini(target.y, screen_rect.size.y)
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_size(target)
+	get_window().size = target
+	var centered: Vector2i = screen_rect.position + ((screen_rect.size - target) / 2)
+	DisplayServer.window_set_position(centered)
 
 func _refresh_window_size_button() -> void:
 	var sz: Vector2i = WINDOW_SIZES[window_size_index]
