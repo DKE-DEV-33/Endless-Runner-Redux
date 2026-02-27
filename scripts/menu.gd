@@ -62,11 +62,14 @@ func _refresh_score_labels() -> void:
 	var best_score: int = _load_best_score()
 	var has_last: bool = get_tree().has_meta("last_score")
 	var last_score: int = int(get_tree().get_meta("last_score", 0))
+	var last_distance: int = int(get_tree().get_meta("last_distance_points", 0))
+	var last_pickup: int = int(get_tree().get_meta("last_pickup_points", 0))
+	var last_risk: int = int(get_tree().get_meta("last_risk_points", 0))
 	var is_new_best: bool = bool(get_tree().get_meta("is_new_best", false))
 
 	if has_last:
 		var suffix: String = " NEW BEST!" if is_new_best else ""
-		last_score_label.text = "Last Run: %d%s" % [last_score, suffix]
+		last_score_label.text = "Last Run: %d%s\nD:%d  P:%d  R:%d" % [last_score, suffix, last_distance, last_pickup, last_risk]
 	else:
 		last_score_label.text = "Last Run: --"
 

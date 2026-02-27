@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.33"
+const BUILD_VERSION: String = "build-1.2.34"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -76,9 +76,9 @@ const HAZARD_EDGE_CLEARANCE: float = 84.0
 const HAZARD_BRANCH_MIN_RATIO: float = 0.42
 const HAZARD_BRANCH_MAX_RATIO: float = 0.66
 const ECON_SECTION_DIFFICULTY_STEP: float = 0.0015
-const HAZARD_CHASER_CHANCE: float = 0.14
-const HAZARD_CHASER_MIN_SPEED: float = 165.0
-const HAZARD_CHASER_MAX_SPEED: float = 245.0
+const HAZARD_CHASER_CHANCE: float = 0.22
+const HAZARD_CHASER_MIN_SPEED: float = 185.0
+const HAZARD_CHASER_MAX_SPEED: float = 275.0
 const FRACTIONAL_LANE_STEP: float = 28.0
 const COIN_ARCH_CHANCE: float = 0.44
 const COIN_ARCH_MIN_WIDTH: float = 260.0
@@ -129,7 +129,8 @@ var next_spawn_x: float = -120.0
 var bootstrap_release_x: float = 0.0
 
 var distance_score: int = 0
-var bonus_score: int = 0
+var pickup_score: int = 0
+var risk_score: int = 0
 var health: int = 3
 var total_coins_collected: int = 0
 var next_bonus_heart_at: int = COINS_PER_BONUS_HEART
@@ -775,7 +776,8 @@ func _place_hazards(x: float, y: float, width: float, lane: int, encounter_mult:
 	else:
 		_spawn_hazard_gate(x, y, width)
 
-	var chaser_chance: float = HAZARD_CHASER_CHANCE + minf(0.14, float(pace_level) * 0.02)
+	var early_bonus: float = 0.10 if current_section <= 1 else 0.0
+	var chaser_chance: float = HAZARD_CHASER_CHANCE + early_bonus + minf(0.18, float(pace_level) * 0.022)
 	if allow_chaser and width > 300.0 and rng.randf() < chaser_chance:
 		_spawn_hazard_chaser(x, y, width)
 
@@ -1104,13 +1106,13 @@ func _create_hazard_chaser(pos: Vector2, speed: float) -> Area2D:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 11.0
+	circle.radius = 14.0
 	shape.shape = circle
 	area.add_child(shape)
 
 	var core: Polygon2D = Polygon2D.new()
 	core.polygon = PackedVector2Array([
-		Vector2(-12, 0), Vector2(-5, -9), Vector2(5, -9), Vector2(12, 0), Vector2(5, 9), Vector2(-5, 9)
+		Vector2(-15, 0), Vector2(-6, -11), Vector2(6, -11), Vector2(15, 0), Vector2(6, 11), Vector2(-6, 11)
 	])
 	core.color = Color(0.92, 0.34, 0.20, 0.96)
 	core.set_meta("is_chaser_core", true)
@@ -1118,7 +1120,7 @@ func _create_hazard_chaser(pos: Vector2, speed: float) -> Area2D:
 
 	var eye: Polygon2D = Polygon2D.new()
 	eye.polygon = PackedVector2Array([
-		Vector2(-5, -2), Vector2(5, -2), Vector2(5, 2), Vector2(-5, 2)
+		Vector2(-6, -2), Vector2(6, -2), Vector2(6, 2), Vector2(-6, 2)
 	])
 	eye.color = Color(1.0, 0.90, 0.40, 0.96)
 	eye.set_meta("is_chaser_eye", true)
@@ -1126,7 +1128,7 @@ func _create_hazard_chaser(pos: Vector2, speed: float) -> Area2D:
 
 	var trail: Polygon2D = Polygon2D.new()
 	trail.polygon = PackedVector2Array([
-		Vector2(10, -7), Vector2(19, -3), Vector2(19, 3), Vector2(10, 7)
+		Vector2(13, -8), Vector2(25, -4), Vector2(25, 4), Vector2(13, 8)
 	])
 	trail.color = Color(1.0, 0.46, 0.22, 0.40)
 	trail.set_meta("is_chaser_trail", true)
@@ -1243,7 +1245,7 @@ func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 	if body != player:
 		return
 	_play_sfx_tone(980.0, 0.045, -14.0)
-	bonus_score += 25
+	pickup_score += 25
 	_register_combo(1, "", false)
 	total_coins_collected += 1
 	while total_coins_collected >= next_bonus_heart_at:
@@ -1261,7 +1263,7 @@ func _on_big_coin_body_entered(body: Node, big_coin: Area2D) -> void:
 	if body != player:
 		return
 	_play_sfx_tone(1120.0, 0.08, -11.0)
-	bonus_score += 25 * BIG_COIN_VALUE
+	pickup_score += 25 * BIG_COIN_VALUE
 	_register_combo(2, "Big relic x10", false)
 	total_coins_collected += BIG_COIN_VALUE
 	while total_coins_collected >= next_bonus_heart_at:
@@ -1433,14 +1435,14 @@ func _animate_runtime_visuals(delta: float) -> void:
 
 func _refresh_score_label() -> void:
 	var combo_mult: float = 1.0 + (float(combo_count) * 0.08)
-	score_label.text = "Score: %d | Pace x%.1f | Combo x%.2f | Coins %d" % [_current_score(), _speed_multiplier(), combo_mult, total_coins_collected]
+	score_label.text = "Score: %d | D:%d P:%d R:%d | Pace x%.1f | Combo x%.2f | Coins %d" % [_current_score(), _distance_points(), pickup_score, risk_score, _speed_multiplier(), combo_mult, total_coins_collected]
 
 func _register_combo(step: int, reason: String = "", show_notice: bool = false) -> void:
 	if step <= 0:
 		return
 	combo_count = mini(COMBO_MAX, combo_count + step)
 	combo_timeout_until = run_seconds + COMBO_TIMEOUT
-	bonus_score += COMBO_BONUS_STEP * combo_count * step
+	risk_score += COMBO_BONUS_STEP * combo_count * step
 	if show_notice and reason != "":
 		_set_info_notice("%s | Combo x%.2f" % [reason, 1.0 + (float(combo_count) * 0.08)], 1.8)
 
@@ -1517,7 +1519,7 @@ func _resolve_rift_event() -> void:
 	var success: bool = (not rift_event_failed) and rift_event_progress >= rift_event_target
 	if success:
 		var reward: int = 360 + (mission_tier * 45)
-		bonus_score += reward
+		risk_score += reward
 		_register_combo(2, "", false)
 		_set_info_notice("%s complete! +%d" % [rift_event_name, reward], 2.6)
 	else:
@@ -1666,7 +1668,7 @@ func _update_mission_progress() -> void:
 		mission_completed = true
 		mission_complete_until = run_seconds + 2.0
 		var reward: int = MISSION_BONUS_BASE + ((mission_tier - 1) * 75)
-		bonus_score += reward
+		risk_score += reward
 		_increment_pace_level(1, "Directive complete")
 		_play_sfx_tone(760.0, 0.16, -8.0)
 		_set_info_notice("Directive %d complete! +%d | Pace %d" % [mission_tier, reward, player.get_pace_level()])
@@ -1762,7 +1764,10 @@ func _set_info_notice(message: String, duration: float = INFO_NOTICE_DURATION) -
 	_refresh_info_label()
 
 func _current_score() -> int:
-	return int(float(distance_score) * _speed_multiplier()) + bonus_score
+	return _distance_points() + pickup_score + risk_score
+
+func _distance_points() -> int:
+	return int(float(distance_score) * _speed_multiplier())
 
 func _speed_multiplier() -> float:
 	return 1.0 + (float(player.get_pace_level()) * 0.1)
@@ -1786,6 +1791,9 @@ func _finish_end_run() -> void:
 		_save_best_score(best_score)
 
 	get_tree().set_meta("last_score", run_score)
+	get_tree().set_meta("last_distance_points", _distance_points())
+	get_tree().set_meta("last_pickup_points", pickup_score)
+	get_tree().set_meta("last_risk_points", risk_score)
 	get_tree().set_meta("best_score", best_score)
 	get_tree().set_meta("is_new_best", is_new_best)
 	get_tree().paused = false
@@ -1842,7 +1850,7 @@ func _toggle_pause_menu() -> void:
 	pause_panel.visible = opening
 	get_tree().paused = opening
 	if opening:
-		pause_status_label.text = "Paused | Score: %d | Pace %d" % [_current_score(), player.get_pace_level()]
+		pause_status_label.text = "Paused | Score %d | D:%d P:%d R:%d | Pace %d" % [_current_score(), _distance_points(), pickup_score, risk_score, player.get_pace_level()]
 		_refresh_window_size_button()
 
 func _on_resume_pressed() -> void:
