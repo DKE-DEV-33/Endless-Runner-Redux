@@ -200,7 +200,7 @@ label_settings = SubResource("1")
 [node name="RulesText" type="Label" parent="RulesOverlay/RulesPanel/VBox"]
 layout_mode = 2
 size_flags_vertical = 3
-text = "Movement\\n- Space: jump (tap short / hold long)\\n- One air jump before landing\\n- Left/Right: decrease/increase pace\\n\\nPlates\\n- Cyan plate: up-through\\n- Amber plate: pass both ways (Down+Jump to drop)\\n- Violet plate: ghost (no collision)\\n\\nPickups\\n- Teal ring [-]: reduce pace by 1-2\\n- Green plus: restore 1 health\\n- Blue sigil: shield next hit\\n- Gold sigil: chrono slow-time\\n- Big coin: worth 10 coins\\n\\nHazards\\n- Static flames and moving chasers both cause damage."
+text = "Movement\\n- Space: jump (tap short / hold long)\\n- One air jump before landing\\n- Left/Right: decrease/increase pace\\n- Hold Down: crouch to dodge low threats/pickups\\n\\nPlates\\n- Cyan plate: up-through\\n- Amber plate: pass both ways (Down+Jump to drop)\\n- Violet plate: ghost (no collision)\\n\\nPickups\\n- Teal ring [-]: reduce pace by 1-2\\n- Green plus: restore 1 health\\n- Blue sigil: shield next hit\\n- Gold sigil: chrono slow-time\\n- Big coin: worth 10 coins (mostly at coin-arch apex)\\n\\nHazards\\n- Static flames and moving chasers both cause damage."
 autowrap_mode = 2
 label_settings = SubResource("2")
 

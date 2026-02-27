@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.27"
+const BUILD_VERSION: String = "build-1.2.28"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -49,7 +49,7 @@ const DROP_THROUGH_SUPPRESS_SEGMENTS: int = 2
 const DROP_THROUGH_PITY_SEGMENTS: int = 6
 const BRANCH_DROP_THROUGH_CHANCE_MID: float = 0.22
 const BRANCH_DROP_THROUGH_CHANCE_TOP: float = 0.30
-const HAZARD_SEGMENT_BASE_CHANCE: float = 0.56
+const HAZARD_SEGMENT_BASE_CHANCE: float = 0.60
 const HAZARD_SEGMENT_COOLDOWN_CHANCE: float = 0.18
 const HAZARD_SEGMENT_PITY_COUNT: int = 3
 const LANE_GUIDE_LENGTH: float = 5600.0
@@ -78,6 +78,11 @@ const ECON_SECTION_DIFFICULTY_STEP: float = 0.0015
 const HAZARD_CHASER_CHANCE: float = 0.14
 const HAZARD_CHASER_MIN_SPEED: float = 165.0
 const HAZARD_CHASER_MAX_SPEED: float = 245.0
+const FRACTIONAL_LANE_STEP: float = 28.0
+const COIN_ARCH_CHANCE: float = 0.44
+const COIN_ARCH_MIN_WIDTH: float = 260.0
+const POWERUP_DEFAULT_FRACTION: float = 2.0
+const BIG_COIN_APEX_FRACTION: float = 3.2
 const SECTION_COLORS: Array[Color] = [
 	Color(0.03, 0.05, 0.08), # Forge dusk
 	Color(0.05, 0.09, 0.15), # Reactor blue
@@ -308,7 +313,6 @@ func _spawn_segment() -> void:
 	add_child(platform)
 
 	_place_coins(next_spawn_x, y, segment_len, lane)
-	_maybe_place_big_coin(next_spawn_x, y, segment_len, lane)
 	var hazards_spawned: bool = _place_hazards(next_spawn_x, y, segment_len, lane)
 	if hazards_spawned:
 		segments_since_hazard_spawn = 0
@@ -612,33 +616,34 @@ func _place_coins(x: float, y: float, width: float, lane: int) -> void:
 	var pace_bonus: int = int(floor(float(player.get_pace_level()) / 3.0))
 	var count: int = 3 + int(width / 200.0) + biome_bonus + lane_bonus + pace_bonus
 	count = clampi(count, 3, 10)
-	var coin_y: float = y - 56.0
-	if lane >= 2:
-		coin_y = y - 46.0
+	var base_coin_fraction: float = 1.0
+	var coin_y: float = _fractional_y(y, base_coin_fraction)
+	var use_arch: bool = lane > 0 and width >= COIN_ARCH_MIN_WIDTH and rng.randf() < COIN_ARCH_CHANCE
 
 	for i: int in count:
 		var t: float = float(i + 1) / float(count + 1)
 		var coin_x: float = lerpf(x + 26.0, x + width - 26.0, t)
+		if use_arch:
+			var arc: float = 1.0 - pow((t * 2.0) - 1.0, 2.0)
+			coin_y = _fractional_y(y, base_coin_fraction + (arc * 2.0))
 		var coin: Area2D = _create_coin(Vector2(coin_x, coin_y))
 		coins.append(coin)
 		add_child(coin)
-
-func _maybe_place_big_coin(x: float, y: float, width: float, lane: int, chance: float = 0.12) -> void:
-	if lane == 0:
-		return
-	if width < 240.0:
-		return
-	var biome_bonus: float = float(_current_biome().get("coin_bonus", 0)) * 0.015
-	var lane_bonus: float = 0.06 if lane >= 2 else 0.03
-	var pace_bonus: float = minf(0.05, float(player.get_pace_level()) * 0.006)
-	var adjusted_chance: float = chance + biome_bonus + lane_bonus + pace_bonus
-	if rng.randf() > adjusted_chance:
-		return
-	var bx: float = x + rng.randf_range(width * 0.35, width * 0.72)
-	var by: float = y - 72.0
-	var big_coin: Area2D = _create_big_coin(Vector2(bx, by))
-	big_coins.append(big_coin)
-	add_child(big_coin)
+	if use_arch and width >= 300.0:
+		var reward_roll: float = rng.randf()
+		var reward_x: float = x + (width * 0.5)
+		if reward_roll < 0.62:
+			var big_coin_y: float = _fractional_y(y, BIG_COIN_APEX_FRACTION)
+			var big_coin: Area2D = _create_big_coin(Vector2(reward_x, big_coin_y))
+			big_coins.append(big_coin)
+			add_child(big_coin)
+		elif reward_roll < 0.76:
+			# Rarely put a strategic pickup at arch apex.
+			var apex_pickup_y: float = _fractional_y(y, BIG_COIN_APEX_FRACTION)
+			var ability_kind: int = AbilityType.SHIELD if rng.randf() < 0.5 else AbilityType.CHRONO
+			var pickup: Area2D = _create_ability_pickup(Vector2(reward_x, apex_pickup_y), ability_kind)
+			ability_pickups.append(pickup)
+			add_child(pickup)
 
 func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 	if lane > 2:
@@ -680,7 +685,7 @@ func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 	return true
 
 func _spawn_hazard_single(x: float, y: float, width: float) -> void:
-	if rng.randf() < 0.35:
+	if rng.randf() < 0.22:
 		return
 	var hx: float = _hazard_x(x, width, rng.randf_range(0.40, 0.70))
 	_spawn_hazard_at(Vector2(hx, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
@@ -707,6 +712,9 @@ func _spawn_hazard_gate(x: float, y: float, width: float) -> void:
 func _hazard_x(x: float, width: float, ratio: float) -> float:
 	return x + clampf(width * ratio, HAZARD_EDGE_CLEARANCE, width - HAZARD_EDGE_CLEARANCE)
 
+func _fractional_y(platform_y: float, steps_up: float) -> float:
+	return platform_y - (FRACTIONAL_LANE_STEP * steps_up)
+
 func _spawn_hazard_at(pos: Vector2) -> void:
 	var hazard: Area2D = _create_hazard(pos)
 	hazards.append(hazard)
@@ -730,7 +738,7 @@ func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, cha
 	var min_offset: float = minf(100.0, width * 0.35)
 	var max_offset: float = maxf(min_offset + 8.0, width - 70.0)
 	var hx: float = x + rng.randf_range(min_offset, max_offset)
-	var hy: float = y - 72.0
+	var hy: float = _fractional_y(y, POWERUP_DEFAULT_FRACTION)
 	var pickup: Area2D = _create_health_pickup(Vector2(hx, hy))
 	health_pickups.append(pickup)
 	add_child(pickup)
@@ -804,7 +812,6 @@ func _spawn_single_branch_platform(x: float, width: float, base_lane: int, targe
 	add_child(branch_platform)
 
 	_place_coins(alt_x, target_y, alt_width, target_lane)
-	_maybe_place_big_coin(alt_x, target_y, alt_width, target_lane, 0.30 + (0.08 * float(lane_delta - 1)))
 
 	danger_routes_since_health += 1
 	_maybe_spawn_branch_hazard(alt_x, target_y, alt_width, lane_delta)
@@ -843,7 +850,7 @@ func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int, over
 	var min_offset: float = minf(90.0, width * 0.32)
 	var max_offset: float = maxf(min_offset + 8.0, width - 60.0)
 	var sx: float = x + rng.randf_range(min_offset, max_offset)
-	var sy: float = y - 66.0
+	var sy: float = _fractional_y(y, POWERUP_DEFAULT_FRACTION)
 	var pickup: Area2D = _create_speed_pickup(Vector2(sx, sy))
 	speed_pickups.append(pickup)
 	add_child(pickup)
@@ -861,7 +868,7 @@ func _maybe_place_ability_pickup(x: float, y: float, width: float, lane: int) ->
 		return false
 	var kind: int = AbilityType.SHIELD if rng.randf() < 0.55 else AbilityType.CHRONO
 	var ax: float = x + rng.randf_range(width * 0.30, width * 0.75)
-	var ay: float = y - 82.0
+	var ay: float = _fractional_y(y, POWERUP_DEFAULT_FRACTION + 0.3)
 	var pickup: Area2D = _create_ability_pickup(Vector2(ax, ay), kind)
 	ability_pickups.append(pickup)
 	add_child(pickup)
@@ -1638,6 +1645,7 @@ func _refresh_legend_text() -> void:
 		"Cyan plate: jump up through.",
 		"Amber plate: up/down through (Down+Jump).",
 		"Violet plate: no collision (ghost).",
+		"Hold Down: crouch to dodge low lines.",
 		"",
 		"Pickups",
 		"Teal ring [-]: reduce pace by 1-2.",
