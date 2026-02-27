@@ -324,16 +324,19 @@ size_flags_vertical = 3
 
 [node name="RulesBody" type="VBoxContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll"]
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
 [node name="Movement" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
 layout_mode = 2
+size_flags_horizontal = 3
 autowrap_mode = 2
 text = "Movement: Space jump (tap/hold), one air jump, Left/Right pace, hold Down crouch."
 label_settings = SubResource("3")
 
 [node name="Plates" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
 layout_mode = 2
+size_flags_horizontal = 3
 autowrap_mode = 2
 text = "Plates: cyan=up-through, amber=drop-through (Down+Jump), violet=ghost/no collision."
 label_settings = SubResource("3")
@@ -360,6 +363,7 @@ stretch_mode = 5
 
 [node name="SpeedText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/SpeedRow"]
 layout_mode = 2
+size_flags_horizontal = 3
 autowrap_mode = 2
 text = "Teal ring [-]: reduce pace by 1-2"
 label_settings = SubResource("3")
@@ -377,6 +381,7 @@ stretch_mode = 5
 
 [node name="HealthText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/HealthRow"]
 layout_mode = 2
+size_flags_horizontal = 3
 autowrap_mode = 2
 text = "Green plus: restore 1 health"
 label_settings = SubResource("3")
@@ -394,6 +399,7 @@ stretch_mode = 5
 
 [node name="ShieldText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ShieldRow"]
 layout_mode = 2
+size_flags_horizontal = 3
 autowrap_mode = 2
 text = "Blue sigil: shield the next hit"
 label_settings = SubResource("3")
@@ -411,12 +417,14 @@ stretch_mode = 5
 
 [node name="ChronoText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ChronoRow"]
 layout_mode = 2
+size_flags_horizontal = 3
 autowrap_mode = 2
 text = "Gold sigil: chrono slow-time"
 label_settings = SubResource("3")
 
 [node name="Hazards" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
 layout_mode = 2
+size_flags_horizontal = 3
 autowrap_mode = 2
 text = "Hazards: static flame pillars and moving fireball chasers both damage you."
 label_settings = SubResource("3")
