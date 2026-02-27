@@ -176,10 +176,17 @@ color = Color(0, 0, 0, 0.56)
 
 [node name="PausePanel" type="Panel" parent="PauseLayer"]
 visible = false
-offset_left = 418.0
-offset_top = 122.0
-offset_right = 862.0
-offset_bottom = 600.0
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -255.0
+offset_top = -250.0
+offset_right = 255.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
 theme_override_styles/panel = SubResource("4")
 
 [node name="VBox" type="VBoxContainer" parent="PauseLayer/PausePanel"]
@@ -230,6 +237,20 @@ max_value = 0.0
 step = 1.0
 value = -6.0
 
+[node name="WindowSizeButton" type="Button" parent="PauseLayer/PausePanel/VBox"]
+layout_mode = 2
+text = "Window: 1600x900"
+theme_override_styles/normal = SubResource("5")
+theme_override_styles/hover = SubResource("6")
+theme_override_styles/pressed = SubResource("7")
+
+[node name="RulesButton" type="Button" parent="PauseLayer/PausePanel/VBox"]
+layout_mode = 2
+text = "Rules"
+theme_override_styles/normal = SubResource("5")
+theme_override_styles/hover = SubResource("6")
+theme_override_styles/pressed = SubResource("7")
+
 [node name="ResumeButton" type="Button" parent="PauseLayer/PausePanel/VBox"]
 layout_mode = 2
 text = "Resume"
@@ -251,8 +272,146 @@ theme_override_styles/normal = SubResource("5")
 theme_override_styles/hover = SubResource("6")
 theme_override_styles/pressed = SubResource("7")
 
-[node name="LegendPauseLabel" type="Label" parent="PauseLayer/PausePanel/VBox"]
+[node name="PauseRulesOverlay" type="ColorRect" parent="PauseLayer"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+color = Color(0, 0, 0, 0.66)
+
+[node name="RulesPanel" type="Panel" parent="PauseLayer/PauseRulesOverlay"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -360.0
+offset_top = -240.0
+offset_right = 360.0
+offset_bottom = 240.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("4")
+
+[node name="VBox" type="VBoxContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 22.0
+offset_top = 20.0
+offset_right = -22.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox"]
 layout_mode = 2
-text = "Legend"
+text = "Rules + Pickups"
+horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="Scroll" type="ScrollContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RulesBody" type="VBoxContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Movement" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
+layout_mode = 2
 autowrap_mode = 2
+text = "Movement: Space jump (tap/hold), one air jump, Left/Right pace, hold Down crouch."
 label_settings = SubResource("3")
+
+[node name="Plates" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Plates: cyan=up-through, amber=drop-through (Down+Jump), violet=ghost/no collision."
+label_settings = SubResource("3")
+
+[node name="ItemsTitle" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
+layout_mode = 2
+text = "Items"
+label_settings = SubResource("2")
+
+[node name="ItemRows" type="VBoxContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SpeedRow" type="HBoxContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SpeedIcon" type="ColorRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/SpeedRow"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+color = Color(0.28, 0.78, 1, 1)
+
+[node name="SpeedText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/SpeedRow"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Teal ring [-]: reduce pace by 1-2"
+label_settings = SubResource("3")
+
+[node name="HealthRow" type="HBoxContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HealthIcon" type="ColorRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/HealthRow"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+color = Color(0.4, 0.96, 0.5, 1)
+
+[node name="HealthText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/HealthRow"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Green plus: restore 1 health"
+label_settings = SubResource("3")
+
+[node name="ShieldRow" type="HBoxContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ShieldIcon" type="ColorRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ShieldRow"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+color = Color(0.54, 0.93, 1, 1)
+
+[node name="ShieldText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ShieldRow"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Blue sigil: shield the next hit"
+label_settings = SubResource("3")
+
+[node name="ChronoRow" type="HBoxContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ChronoIcon" type="ColorRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ChronoRow"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+color = Color(1, 0.86, 0.42, 1)
+
+[node name="ChronoText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/ChronoRow"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Gold sigil: chrono slow-time"
+label_settings = SubResource("3")
+
+[node name="Hazards" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
+layout_mode = 2
+autowrap_mode = 2
+text = "Hazards: static flame pillars and moving fireball chasers both damage you."
+label_settings = SubResource("3")
+
+[node name="CloseButton" type="Button" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox"]
+layout_mode = 2
+text = "Close"
+theme_override_styles/normal = SubResource("5")
+theme_override_styles/hover = SubResource("6")
+theme_override_styles/pressed = SubResource("7")

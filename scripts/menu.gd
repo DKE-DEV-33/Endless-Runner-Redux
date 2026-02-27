@@ -1,7 +1,7 @@
 extends Control
 const INTRO_MUSIC_PATH: String = "res://assets/audio/intro_music.mp3"
 const SETTINGS_FILE: String = "user://settings.cfg"
-const UI_SCALES: Array[float] = [1.0, 1.25, 1.5]
+const WINDOW_SIZES: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
 
 @onready var start_button: Button = $Card/Center/StartButton
 @onready var rules_button: Button = $Card/Center/RulesButton
@@ -16,7 +16,7 @@ const UI_SCALES: Array[float] = [1.0, 1.25, 1.5]
 
 var run_mode: String = "standard"
 var intro_player: AudioStreamPlayer = AudioStreamPlayer.new()
-var ui_scale_index: int = 0
+var window_size_index: int = 1
 
 func _ready() -> void:
 	start_button.pressed.connect(_on_start_pressed)
@@ -29,7 +29,7 @@ func _ready() -> void:
 	_load_display_settings()
 	run_mode = String(get_tree().get_meta("run_mode", "standard"))
 	_refresh_mode_ui()
-	_refresh_ui_scale_button()
+	_refresh_window_size_button()
 	_refresh_score_labels()
 	rules_overlay.visible = false
 
@@ -53,9 +53,9 @@ func _on_mode_pressed() -> void:
 	_refresh_mode_ui()
 
 func _on_ui_scale_pressed() -> void:
-	ui_scale_index = (ui_scale_index + 1) % UI_SCALES.size()
-	_apply_ui_scale(UI_SCALES[ui_scale_index])
-	_refresh_ui_scale_button()
+	window_size_index = (window_size_index + 1) % WINDOW_SIZES.size()
+	_apply_window_size(window_size_index)
+	_refresh_window_size_button()
 	_save_display_settings()
 
 func _refresh_score_labels() -> void:
@@ -98,31 +98,24 @@ func _unhandled_input(event: InputEvent) -> void:
 func _load_display_settings() -> void:
 	var config: ConfigFile = ConfigFile.new()
 	var err: int = config.load(SETTINGS_FILE)
-	var desired: float = 1.0
+	window_size_index = 1
 	if err == OK:
-		desired = float(config.get_value("display", "ui_scale", 1.0))
-	var best_idx: int = 0
-	var best_diff: float = 999.0
-	for i: int in UI_SCALES.size():
-		var diff: float = absf(UI_SCALES[i] - desired)
-		if diff < best_diff:
-			best_diff = diff
-			best_idx = i
-	ui_scale_index = best_idx
-	_apply_ui_scale(UI_SCALES[ui_scale_index])
+		window_size_index = int(config.get_value("display", "window_size_index", 1))
+	window_size_index = clampi(window_size_index, 0, WINDOW_SIZES.size() - 1)
+	_apply_window_size(window_size_index)
 
 func _save_display_settings() -> void:
 	var config: ConfigFile = ConfigFile.new()
 	config.load(SETTINGS_FILE)
-	config.set_value("display", "ui_scale", UI_SCALES[ui_scale_index])
+	config.set_value("display", "window_size_index", window_size_index)
 	config.save(SETTINGS_FILE)
 
-func _apply_ui_scale(scale_value: float) -> void:
-	get_window().content_scale_factor = scale_value
+func _apply_window_size(size_index: int) -> void:
+	get_window().size = WINDOW_SIZES[size_index]
 
-func _refresh_ui_scale_button() -> void:
-	var percent: int = int(round(UI_SCALES[ui_scale_index] * 100.0))
-	ui_scale_button.text = "UI Scale: %d%%" % percent
+func _refresh_window_size_button() -> void:
+	var sz: Vector2i = WINDOW_SIZES[window_size_index]
+	ui_scale_button.text = "Window: %dx%d" % [sz.x, sz.y]
 
 func _setup_intro_music() -> void:
 	intro_player.name = "IntroMusic"

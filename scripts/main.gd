@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.31"
+const BUILD_VERSION: String = "build-1.2.32"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -33,6 +33,7 @@ const SPEED_PICKUP_PITY_SEGMENTS: int = 18
 const HAZARD_HIT_COOLDOWN: float = 0.45
 const HAZARD_DODGE_Y_WINDOW: float = 180.0
 const SETTINGS_FILE: String = "user://settings.cfg"
+const WINDOW_SIZES: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
 const HEALTH_PICKUP_PITY_DANGER_ROUTES: int = 5
 const BIG_COIN_VALUE: int = 10
 const PLATFORM_LAYER_SOLID: int = 1
@@ -113,10 +114,13 @@ const GAMEPLAY_MUSIC_PATH: String = "res://assets/audio/gameplay_music.mp3"
 @onready var pause_backdrop: ColorRect = $PauseLayer/PauseBackdrop
 @onready var pause_panel: Panel = $PauseLayer/PausePanel
 @onready var pause_status_label: Label = $PauseLayer/PausePanel/VBox/PauseStatusLabel
+@onready var pause_window_size_button: Button = $PauseLayer/PausePanel/VBox/WindowSizeButton
+@onready var pause_rules_button: Button = $PauseLayer/PausePanel/VBox/RulesButton
 @onready var resume_button: Button = $PauseLayer/PausePanel/VBox/ResumeButton
 @onready var restart_button: Button = $PauseLayer/PausePanel/VBox/RestartButton
 @onready var menu_button: Button = $PauseLayer/PausePanel/VBox/MenuButton
-@onready var pause_legend_label: Label = $PauseLayer/PausePanel/VBox/LegendPauseLabel
+@onready var pause_rules_overlay: ColorRect = $PauseLayer/PauseRulesOverlay
+@onready var pause_rules_close_button: Button = $PauseLayer/PauseRulesOverlay/RulesPanel/VBox/CloseButton
 @onready var master_slider: HSlider = $PauseLayer/PausePanel/VBox/MasterSlider
 @onready var sfx_slider: HSlider = $PauseLayer/PausePanel/VBox/SfxSlider
 
@@ -147,6 +151,7 @@ var combo_timeout_until: float = 0.0
 var run_mode: String = "standard"
 var run_seed: int = 0
 var sfx_volume_db: float = -6.0
+var window_size_index: int = 1
 var info_notice: String = ""
 var info_notice_until: float = 0.0
 var run_end_requested: bool = false
@@ -194,6 +199,7 @@ var lane_guides: Array[Dictionary] = []
 func _ready() -> void:
 	_setup_run_mode_and_seed()
 	_load_audio_settings()
+	_load_display_settings()
 	player.global_position = Vector2(120.0, 408.0)
 	player.velocity = Vector2.ZERO
 	player.jump_triggered.connect(_on_player_jump_triggered)
@@ -221,6 +227,9 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
+		if pause_rules_overlay.visible:
+			_hide_pause_rules()
+			return
 		_toggle_pause_menu()
 		return
 	if event is InputEventKey:
@@ -1746,7 +1755,6 @@ func _refresh_legend_text() -> void:
 	]
 	var legend_text: String = "\n".join(lines)
 	legend_label.text = legend_text
-	pause_legend_label.text = legend_text
 
 func _set_info_notice(message: String, duration: float = INFO_NOTICE_DURATION) -> void:
 	info_notice = message
@@ -1811,7 +1819,11 @@ func _setup_pause_ui() -> void:
 	pause_backdrop.process_mode = Node.PROCESS_MODE_ALWAYS
 	pause_backdrop.visible = false
 	pause_panel.visible = false
+	pause_rules_overlay.visible = false
 
+	pause_window_size_button.pressed.connect(_on_pause_window_size_pressed)
+	pause_rules_button.pressed.connect(_on_pause_rules_pressed)
+	pause_rules_close_button.pressed.connect(_hide_pause_rules)
 	resume_button.pressed.connect(_on_resume_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
 	menu_button.pressed.connect(_on_menu_pressed)
@@ -1820,18 +1832,21 @@ func _setup_pause_ui() -> void:
 
 	master_slider.value = AudioServer.get_bus_volume_db(0)
 	sfx_slider.value = sfx_volume_db
-	_refresh_legend_text()
+	_refresh_window_size_button()
 
 func _toggle_pause_menu() -> void:
 	var opening: bool = not pause_panel.visible
+	if not opening:
+		_hide_pause_rules()
 	pause_backdrop.visible = opening
 	pause_panel.visible = opening
 	get_tree().paused = opening
 	if opening:
 		pause_status_label.text = "Paused | Score: %d | Pace %d" % [_current_score(), player.get_pace_level()]
-		_refresh_legend_text()
+		_refresh_window_size_button()
 
 func _on_resume_pressed() -> void:
+	_hide_pause_rules()
 	pause_backdrop.visible = false
 	pause_panel.visible = false
 	get_tree().paused = false
@@ -1845,6 +1860,22 @@ func _on_menu_pressed() -> void:
 	Engine.time_scale = 1.0
 	get_tree().paused = false
 	_end_run_and_return_to_menu()
+
+func _on_pause_window_size_pressed() -> void:
+	window_size_index = (window_size_index + 1) % WINDOW_SIZES.size()
+	_apply_window_size(window_size_index)
+	_refresh_window_size_button()
+	_save_display_settings()
+
+func _refresh_window_size_button() -> void:
+	var sz: Vector2i = WINDOW_SIZES[window_size_index]
+	pause_window_size_button.text = "Window: %dx%d" % [sz.x, sz.y]
+
+func _on_pause_rules_pressed() -> void:
+	pause_rules_overlay.visible = true
+
+func _hide_pause_rules() -> void:
+	pause_rules_overlay.visible = false
 
 func _on_master_slider_changed(value: float) -> void:
 	AudioServer.set_bus_volume_db(0, value)
@@ -1860,11 +1891,28 @@ func _load_audio_settings() -> void:
 	if err != OK:
 		AudioServer.set_bus_volume_db(0, -4.0)
 		sfx_volume_db = -6.0
-		get_window().content_scale_factor = 1.0
 		return
 	AudioServer.set_bus_volume_db(0, float(config.get_value("audio", "master_db", -4.0)))
 	sfx_volume_db = float(config.get_value("audio", "sfx_db", -6.0))
-	get_window().content_scale_factor = float(config.get_value("display", "ui_scale", 1.0))
+
+func _load_display_settings() -> void:
+	var config: ConfigFile = ConfigFile.new()
+	if config.load(SETTINGS_FILE) != OK:
+		window_size_index = 1
+		_apply_window_size(window_size_index)
+		return
+	window_size_index = int(config.get_value("display", "window_size_index", 1))
+	window_size_index = clampi(window_size_index, 0, WINDOW_SIZES.size() - 1)
+	_apply_window_size(window_size_index)
+
+func _apply_window_size(size_index: int) -> void:
+	get_window().size = WINDOW_SIZES[size_index]
+
+func _save_display_settings() -> void:
+	var config: ConfigFile = ConfigFile.new()
+	config.load(SETTINGS_FILE)
+	config.set_value("display", "window_size_index", window_size_index)
+	config.save(SETTINGS_FILE)
 
 func _save_audio_settings() -> void:
 	var config: ConfigFile = ConfigFile.new()
