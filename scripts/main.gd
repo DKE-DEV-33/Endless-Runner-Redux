@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.35"
+const BUILD_VERSION: String = "build-1.2.36"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -79,6 +79,7 @@ const ECON_SECTION_DIFFICULTY_STEP: float = 0.0015
 const HAZARD_CHASER_CHANCE: float = 0.22
 const HAZARD_CHASER_MIN_SPEED: float = 185.0
 const HAZARD_CHASER_MAX_SPEED: float = 275.0
+const CHASER_MIN_PLATFORM_CLEARANCE_STEPS: float = 1.0
 const FRACTIONAL_LANE_STEP: float = 28.0
 const COIN_ARCH_CHANCE: float = 0.44
 const COIN_ARCH_MIN_WIDTH: float = 260.0
@@ -827,7 +828,8 @@ func _spawn_hazard_at(pos: Vector2) -> void:
 
 func _spawn_hazard_chaser(x: float, y: float, width: float) -> void:
 	var spawn_x: float = _hazard_x(x, width, 0.86)
-	var spawn_y: float = y - (PLATFORM_THICKNESS * 0.5) - 22.0
+	# Keep chasers at least one fractional lane above the nearest platform so crouch remains viable.
+	var spawn_y: float = y - (PLATFORM_THICKNESS * 0.5) - (FRACTIONAL_LANE_STEP * CHASER_MIN_PLATFORM_CLEARANCE_STEPS) - 8.0
 	var speed: float = rng.randf_range(HAZARD_CHASER_MIN_SPEED, HAZARD_CHASER_MAX_SPEED)
 	var chaser: Area2D = _create_hazard_chaser(Vector2(spawn_x, spawn_y), speed)
 	hazards.append(chaser)
@@ -1109,13 +1111,13 @@ func _create_hazard_chaser(pos: Vector2, speed: float) -> Area2D:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 14.0
+	circle.radius = 18.0
 	shape.shape = circle
 	area.add_child(shape)
 
 	var core: Polygon2D = Polygon2D.new()
 	core.polygon = PackedVector2Array([
-		Vector2(-15, 0), Vector2(-6, -11), Vector2(6, -11), Vector2(15, 0), Vector2(6, 11), Vector2(-6, 11)
+		Vector2(-19, 0), Vector2(-8, -14), Vector2(8, -14), Vector2(19, 0), Vector2(8, 14), Vector2(-8, 14)
 	])
 	core.color = Color(0.92, 0.34, 0.20, 0.96)
 	core.set_meta("is_chaser_core", true)
@@ -1123,7 +1125,7 @@ func _create_hazard_chaser(pos: Vector2, speed: float) -> Area2D:
 
 	var eye: Polygon2D = Polygon2D.new()
 	eye.polygon = PackedVector2Array([
-		Vector2(-6, -2), Vector2(6, -2), Vector2(6, 2), Vector2(-6, 2)
+		Vector2(-8, -3), Vector2(8, -3), Vector2(8, 3), Vector2(-8, 3)
 	])
 	eye.color = Color(1.0, 0.90, 0.40, 0.96)
 	eye.set_meta("is_chaser_eye", true)
@@ -1131,7 +1133,7 @@ func _create_hazard_chaser(pos: Vector2, speed: float) -> Area2D:
 
 	var trail: Polygon2D = Polygon2D.new()
 	trail.polygon = PackedVector2Array([
-		Vector2(13, -8), Vector2(25, -4), Vector2(25, 4), Vector2(13, 8)
+		Vector2(17, -10), Vector2(32, -5), Vector2(32, 5), Vector2(17, 10)
 	])
 	trail.color = Color(1.0, 0.46, 0.22, 0.40)
 	trail.set_meta("is_chaser_trail", true)
