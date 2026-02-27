@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.29"
+const BUILD_VERSION: String = "build-1.2.30"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -11,7 +11,7 @@ const MAX_SEGMENT: float = 520.0
 const START_PLATFORM_X: float = -260.0
 const START_PLATFORM_LENGTH: float = 1100.0
 const START_LANE: int = 0
-const BOOTSTRAP_RELEASE_OFFSET: float = 1400.0
+const BOOTSTRAP_RELEASE_OFFSET: float = 1080.0
 const RIFT_MIN_SECONDS: float = 16.0
 const RIFT_MAX_SECONDS: float = 28.0
 const RIFT_DURATION: float = 6.0
@@ -49,7 +49,7 @@ const DROP_THROUGH_SUPPRESS_SEGMENTS: int = 2
 const DROP_THROUGH_PITY_SEGMENTS: int = 6
 const BRANCH_DROP_THROUGH_CHANCE_MID: float = 0.22
 const BRANCH_DROP_THROUGH_CHANCE_TOP: float = 0.30
-const HAZARD_SEGMENT_BASE_CHANCE: float = 0.60
+const HAZARD_SEGMENT_BASE_CHANCE: float = 0.67
 const HAZARD_SEGMENT_COOLDOWN_CHANCE: float = 0.18
 const HAZARD_SEGMENT_PITY_COUNT: int = 3
 const LANE_GUIDE_LENGTH: float = 5600.0
@@ -139,7 +139,7 @@ var run_seconds: float = 0.0
 var current_section: int = 0
 var current_biome_index: int = 0
 var hazard_hit_cooldown: float = 0.0
-var segments_since_hazard_spawn: int = 2
+var segments_since_hazard_spawn: int = HAZARD_SEGMENT_PITY_COUNT
 var danger_routes_since_health: int = 0
 var routes_since_speed_pickup: int = 0
 var combo_count: int = 0
@@ -650,7 +650,7 @@ func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 		return false
 	var pace_level: int = player.get_pace_level()
 	var hazard_mult: float = float(_current_biome().get("hazard_mult", 1.0))
-	var skip_chance: float = clampf((0.5 / hazard_mult) - (float(pace_level) * 0.02), 0.08, 0.72)
+	var skip_chance: float = clampf((0.42 / hazard_mult) - (float(pace_level) * 0.024), 0.04, 0.62)
 	if width < 260.0 and rng.randf() < skip_chance:
 		return false
 
@@ -685,7 +685,7 @@ func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 	return true
 
 func _spawn_hazard_single(x: float, y: float, width: float) -> void:
-	if rng.randf() < 0.22:
+	if rng.randf() < 0.12:
 		return
 	var hx: float = _hazard_x(x, width, rng.randf_range(0.40, 0.70))
 	_spawn_hazard_at(Vector2(hx, y - (PLATFORM_THICKNESS * 0.5) - 18.0))
@@ -881,7 +881,7 @@ func _create_coin(pos: Vector2) -> Area2D:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
-	circle.radius = 11.0
+	circle.radius = 13.0
 	shape.shape = circle
 	area.add_child(shape)
 
@@ -963,21 +963,21 @@ func _create_hazard(pos: Vector2) -> Area2D:
 
 	var base: Polygon2D = Polygon2D.new()
 	base.polygon = PackedVector2Array([
-		Vector2(-17, 12), Vector2(17, 12), Vector2(12, 19), Vector2(-12, 19)
+		Vector2(-20, 13), Vector2(20, 13), Vector2(14, 22), Vector2(-14, 22)
 	])
 	base.color = Color(0.22, 0.17, 0.16)
 	area.add_child(base)
 
 	var danger_ring: Polygon2D = Polygon2D.new()
 	danger_ring.polygon = PackedVector2Array([
-		Vector2(-19, 11), Vector2(0, -24), Vector2(19, 11), Vector2(13, 19), Vector2(-13, 19)
+		Vector2(-22, 12), Vector2(0, -29), Vector2(22, 12), Vector2(15, 22), Vector2(-15, 22)
 	])
 	danger_ring.color = Color(1.0, 0.36, 0.20, 0.22)
 	area.add_child(danger_ring)
 
 	var flame_outer: Polygon2D = Polygon2D.new()
 	flame_outer.polygon = PackedVector2Array([
-		Vector2(-14, 14), Vector2(-5, -3), Vector2(0, -22), Vector2(6, -3), Vector2(14, 14)
+		Vector2(-17, 16), Vector2(-6, -4), Vector2(0, -27), Vector2(7, -4), Vector2(17, 16)
 	])
 	flame_outer.color = Color(0.96, 0.35, 0.22)
 	flame_outer.set_meta("is_flame_outer", true)
@@ -985,7 +985,7 @@ func _create_hazard(pos: Vector2) -> Area2D:
 
 	var flame_inner: Polygon2D = Polygon2D.new()
 	flame_inner.polygon = PackedVector2Array([
-		Vector2(-7, 12), Vector2(-2, 1), Vector2(0, -12), Vector2(3, 1), Vector2(7, 12)
+		Vector2(-9, 14), Vector2(-2, 1), Vector2(0, -15), Vector2(4, 1), Vector2(9, 14)
 	])
 	flame_inner.color = Color(1.0, 0.80, 0.34)
 	flame_inner.set_meta("is_flame_inner", true)
@@ -1769,9 +1769,11 @@ func _load_audio_settings() -> void:
 	if err != OK:
 		AudioServer.set_bus_volume_db(0, -4.0)
 		sfx_volume_db = -6.0
+		get_window().content_scale_factor = 1.0
 		return
 	AudioServer.set_bus_volume_db(0, float(config.get_value("audio", "master_db", -4.0)))
 	sfx_volume_db = float(config.get_value("audio", "sfx_db", -6.0))
+	get_window().content_scale_factor = float(config.get_value("display", "ui_scale", 1.0))
 
 func _save_audio_settings() -> void:
 	var config: ConfigFile = ConfigFile.new()
