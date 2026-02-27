@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.30"
+const BUILD_VERSION: String = "build-1.2.31"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -169,8 +169,11 @@ enum MissionType { COINS, SURVIVE_TIME, NO_HIT_DISTANCE }
 enum PlatformType { SOLID, ONE_WAY_UP, DROP_THROUGH, GHOST }
 enum AbilityType { SHIELD, CHRONO }
 enum RiftEventType { NONE, COIN_SURGE, PHASE_LINE, EMBER_BREAKER }
+enum EncounterPhase { PLATFORM_CHALLENGE, HAZARD_PRESSURE, RECOVERY_WINDOW, REWARD_BURST }
 var mission_type: int = MissionType.COINS
 var mission_no_hit_start_x: float = 0.0
+var encounter_phase: int = EncounterPhase.PLATFORM_CHALLENGE
+var encounter_segments_left: int = 0
 
 var platforms: Array[Node2D] = []
 var coins: Array[Area2D] = []
@@ -201,6 +204,7 @@ func _ready() -> void:
 	_build_parallax_layers()
 	_setup_biome_music()
 	_init_mission()
+	_init_encounter_director()
 	_prewarm_post_bootstrap_route()
 	next_rift_at = rng.randf_range(RIFT_MIN_SECONDS, RIFT_MAX_SECONDS)
 	_apply_biome_for_section(0, false)
@@ -293,13 +297,46 @@ func _spawn_fixed_platform(start_x: float, lane: int, width: float, gap_after: f
 	platforms.append(platform)
 	add_child(platform)
 	if add_coins:
-		_place_coins(start_x, y, width, lane)
+		_place_coins(start_x, y, width, lane, 1.0, false)
 	return start_x + width + gap_after
 
 func _spawn_segment() -> void:
 	var segment_len: float = _pick_segment_length()
 	var lane: int = _pick_reachable_lane(last_lane)
 	var y: float = LANE_Y[lane]
+	var coin_mult: float = 1.0
+	var force_coin_arch: bool = false
+	var hazard_mult: float = 1.0
+	var force_hazard: bool = false
+	var allow_chaser: bool = true
+	var branch_force: bool = false
+	var branch_mult: float = 1.0
+	var recovery_mode: bool = false
+	var reward_mode: bool = false
+
+	match encounter_phase:
+		EncounterPhase.PLATFORM_CHALLENGE:
+			hazard_mult = 0.82
+			branch_force = rng.randf() < 0.65
+			branch_mult = 1.45
+		EncounterPhase.HAZARD_PRESSURE:
+			hazard_mult = 1.55
+			force_hazard = (segments_since_hazard_spawn >= 1) or (rng.randf() < 0.45)
+			allow_chaser = true
+			branch_mult = 0.90
+		EncounterPhase.RECOVERY_WINDOW:
+			hazard_mult = 0.35
+			allow_chaser = false
+			recovery_mode = true
+			branch_mult = 0.55
+		EncounterPhase.REWARD_BURST:
+			coin_mult = 1.35
+			force_coin_arch = true
+			hazard_mult = 0.52
+			allow_chaser = false
+			reward_mode = true
+			branch_mult = 1.20
+
 	var platform_type: int = _pick_platform_type_for_lane(lane)
 	if platform_type == PlatformType.DROP_THROUGH:
 		segments_since_drop_through = 0
@@ -312,22 +349,70 @@ func _spawn_segment() -> void:
 	platforms.append(platform)
 	add_child(platform)
 
-	_place_coins(next_spawn_x, y, segment_len, lane)
-	var hazards_spawned: bool = _place_hazards(next_spawn_x, y, segment_len, lane)
+	_place_coins(next_spawn_x, y, segment_len, lane, coin_mult, force_coin_arch)
+	var hazards_spawned: bool = _place_hazards(next_spawn_x, y, segment_len, lane, hazard_mult, force_hazard, allow_chaser)
 	if hazards_spawned:
 		segments_since_hazard_spawn = 0
 	else:
 		segments_since_hazard_spawn += 1
 	routes_since_speed_pickup += 1
-	var speed_spawned: bool = _maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane)
-	if not speed_spawned and routes_since_speed_pickup >= SPEED_PICKUP_PITY_SEGMENTS and player.get_pace_level() >= 4:
-		_maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane, 1.0)
-	_maybe_place_ability_pickup(next_spawn_x, y, segment_len, lane)
-	_spawn_branch_routes(next_spawn_x, segment_len, lane)
+	if recovery_mode:
+		_maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane, 0.74)
+		var recovery_health: bool = _maybe_place_health_pickup(next_spawn_x, y, segment_len, lane, 0.88)
+		if not recovery_health:
+			_maybe_place_health_pickup(next_spawn_x, y, segment_len, lane, 1.0)
+	elif reward_mode:
+		_maybe_place_ability_pickup(next_spawn_x, y, segment_len, lane)
+		_maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane, 0.12)
+	else:
+		var speed_spawned: bool = _maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane)
+		if not speed_spawned and routes_since_speed_pickup >= SPEED_PICKUP_PITY_SEGMENTS and player.get_pace_level() >= 4:
+			_maybe_place_speed_pickup(next_spawn_x, y, segment_len, lane, 1.0)
+		_maybe_place_ability_pickup(next_spawn_x, y, segment_len, lane)
+	_spawn_branch_routes(next_spawn_x, segment_len, lane, branch_force, branch_mult)
 
 	var gap: float = _safe_gap_for_transition(last_lane, lane)
 	next_spawn_x += segment_len + gap
 	last_lane = lane
+
+	if not _bootstrap_active():
+		encounter_segments_left -= 1
+		if encounter_segments_left <= 0:
+			_advance_encounter_phase()
+
+func _init_encounter_director() -> void:
+	encounter_phase = EncounterPhase.PLATFORM_CHALLENGE
+	encounter_segments_left = _encounter_length_for(encounter_phase)
+
+func _encounter_length_for(phase: int) -> int:
+	var tier_bonus: int = mini(2, int((mission_tier - 1) / 3))
+	match phase:
+		EncounterPhase.PLATFORM_CHALLENGE:
+			return 2 + tier_bonus
+		EncounterPhase.HAZARD_PRESSURE:
+			return 2 + tier_bonus
+		EncounterPhase.RECOVERY_WINDOW:
+			return 1
+		EncounterPhase.REWARD_BURST:
+			return 1 + (1 if mission_tier >= 5 else 0)
+	return 1
+
+func _encounter_name(phase: int = encounter_phase) -> String:
+	match phase:
+		EncounterPhase.PLATFORM_CHALLENGE:
+			return "Platform Challenge"
+		EncounterPhase.HAZARD_PRESSURE:
+			return "Hazard Pressure"
+		EncounterPhase.RECOVERY_WINDOW:
+			return "Recovery Window"
+		EncounterPhase.REWARD_BURST:
+			return "Reward Burst"
+	return "Unknown"
+
+func _advance_encounter_phase() -> void:
+	encounter_phase = (encounter_phase + 1) % 4
+	encounter_segments_left = _encounter_length_for(encounter_phase)
+	_set_info_notice("Encounter: %s" % _encounter_name(encounter_phase), 2.2)
 
 func _pick_segment_length() -> float:
 	# Slightly longer segments over time create a steadier rhythm while still increasing challenge.
@@ -610,15 +695,19 @@ func _add_platform_rule_markers(body: StaticBody2D, width: float, platform_type:
 			ring.color = Color(0.96, 0.88, 1.0, 0.85)
 			body.add_child(ring)
 
-func _place_coins(x: float, y: float, width: float, lane: int) -> void:
+func _place_coins(x: float, y: float, width: float, lane: int, reward_mult: float = 1.0, force_arch: bool = false) -> void:
 	var biome_bonus: int = int(_current_biome().get("coin_bonus", 0))
 	var lane_bonus: int = 1 if lane > 0 else 0
 	var pace_bonus: int = int(floor(float(player.get_pace_level()) / 3.0))
 	var count: int = 3 + int(width / 200.0) + biome_bonus + lane_bonus + pace_bonus
+	count = int(round(float(count) * clampf(reward_mult, 0.7, 1.8)))
 	count = clampi(count, 3, 10)
 	var base_coin_fraction: float = 1.0
 	var coin_y: float = _fractional_y(y, base_coin_fraction)
-	var use_arch: bool = lane > 0 and width >= COIN_ARCH_MIN_WIDTH and rng.randf() < COIN_ARCH_CHANCE
+	var arch_chance: float = COIN_ARCH_CHANCE
+	if reward_mult > 1.0:
+		arch_chance = minf(0.9, arch_chance + ((reward_mult - 1.0) * 0.35))
+	var use_arch: bool = lane > 0 and width >= COIN_ARCH_MIN_WIDTH and (force_arch or (rng.randf() < arch_chance))
 
 	for i: int in count:
 		var t: float = float(i + 1) / float(count + 1)
@@ -645,7 +734,7 @@ func _place_coins(x: float, y: float, width: float, lane: int) -> void:
 			ability_pickups.append(pickup)
 			add_child(pickup)
 
-func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
+func _place_hazards(x: float, y: float, width: float, lane: int, encounter_mult: float = 1.0, force_spawn: bool = false, allow_chaser: bool = true) -> bool:
 	if lane > 2:
 		return false
 	var pace_level: int = player.get_pace_level()
@@ -655,11 +744,13 @@ func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 		return false
 
 	var pace_bonus: float = minf(0.20, float(pace_level) * 0.03)
-	var segment_hazard_chance: float = clampf((HAZARD_SEGMENT_BASE_CHANCE * hazard_mult) + pace_bonus, 0.24, 0.88)
+	var segment_hazard_chance: float = clampf(((HAZARD_SEGMENT_BASE_CHANCE * hazard_mult) + pace_bonus) * encounter_mult, 0.12, 0.95)
 	if segments_since_hazard_spawn <= 0:
 		segment_hazard_chance = HAZARD_SEGMENT_COOLDOWN_CHANCE
 	elif segments_since_hazard_spawn >= HAZARD_SEGMENT_PITY_COUNT:
 		segment_hazard_chance = maxf(segment_hazard_chance, 0.92)
+	if force_spawn:
+		segment_hazard_chance = maxf(segment_hazard_chance, 0.96)
 	if rng.randf() > segment_hazard_chance:
 		return false
 
@@ -676,7 +767,7 @@ func _place_hazards(x: float, y: float, width: float, lane: int) -> bool:
 		_spawn_hazard_gate(x, y, width)
 
 	var chaser_chance: float = HAZARD_CHASER_CHANCE + minf(0.14, float(pace_level) * 0.02)
-	if width > 300.0 and rng.randf() < chaser_chance:
+	if allow_chaser and width > 300.0 and rng.randf() < chaser_chance:
 		_spawn_hazard_chaser(x, y, width)
 
 	if rift_active and width > 320.0 and rng.randf() < 0.45:
@@ -744,14 +835,14 @@ func _maybe_place_health_pickup(x: float, y: float, width: float, lane: int, cha
 	add_child(pickup)
 	return true
 
-func _spawn_branch_routes(x: float, width: float, base_lane: int) -> void:
+func _spawn_branch_routes(x: float, width: float, base_lane: int, force_branches: bool = false, spawn_mult: float = 1.0) -> void:
 	if width < 320.0:
 		return
 	var spawn_branches: bool = false
 	if branch_chain_remaining > 0:
 		spawn_branches = true
 		branch_chain_remaining -= 1
-	elif rng.randf() < BRANCH_CHAIN_CHANCE:
+	elif force_branches or rng.randf() < (BRANCH_CHAIN_CHANCE * spawn_mult):
 		spawn_branches = true
 		branch_chain_remaining = rng.randi_range(0, BRANCH_CHAIN_MAX)
 
@@ -811,7 +902,7 @@ func _spawn_single_branch_platform(x: float, width: float, base_lane: int, targe
 	platforms.append(branch_platform)
 	add_child(branch_platform)
 
-	_place_coins(alt_x, target_y, alt_width, target_lane)
+	_place_coins(alt_x, target_y, alt_width, target_lane, 1.0, false)
 
 	danger_routes_since_health += 1
 	_maybe_spawn_branch_hazard(alt_x, target_y, alt_width, lane_delta)
@@ -1628,7 +1719,7 @@ func _compute_health_spawn_chance() -> float:
 	return clampf(chance, 0.04, 0.85)
 
 func _base_info_text() -> String:
-	var text: String = "Mode: %s | Biome: %s | Esc: pause/settings/rules | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
+	var text: String = "Mode: %s | Biome: %s | Encounter: %s | Esc: pause/settings/rules | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge"), _encounter_name()]
 	if rift_active and rift_event_type != RiftEventType.NONE:
 		text += " | Event: %s %d/%d" % [rift_event_name, rift_event_progress, rift_event_target]
 	return text
