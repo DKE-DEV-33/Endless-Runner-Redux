@@ -99,6 +99,7 @@ offset_bottom = 722.0
 color = Color(0.02, 0.06, 0.11, 0.82)
 
 [node name="LegendCard" type="ColorRect" parent="CanvasLayer"]
+visible = false
 offset_left = 918.0
 offset_top = 12.0
 offset_right = 1266.0
@@ -106,6 +107,7 @@ offset_bottom = 156.0
 color = Color(0.02, 0.06, 0.11, 0.82)
 
 [node name="LegendLabel" type="Label" parent="CanvasLayer"]
+visible = false
 offset_left = 932.0
 offset_top = 20.0
 offset_right = 1254.0

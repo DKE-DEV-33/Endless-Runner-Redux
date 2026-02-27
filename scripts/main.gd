@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.26"
+const BUILD_VERSION: String = "build-1.2.27"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -1621,7 +1621,7 @@ func _compute_health_spawn_chance() -> float:
 	return clampf(chance, 0.04, 0.85)
 
 func _base_info_text() -> String:
-	var text: String = "Mode: %s | Biome: %s | See top-right legend for rules/pickups | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
+	var text: String = "Mode: %s | Biome: %s | Esc: pause/settings/rules | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge")]
 	if rift_active and rift_event_type != RiftEventType.NONE:
 		text += " | Event: %s %d/%d" % [rift_event_name, rift_event_progress, rift_event_target]
 	return text
