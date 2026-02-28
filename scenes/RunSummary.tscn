@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/run_summary.gd" id="1"]
 
@@ -46,6 +46,24 @@ corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="7"]
+bg_color = Color(0.07, 0.13, 0.22, 0.92)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.27, 0.64, 0.94, 0.42)
+
+[sub_resource type="LabelSettings" id="8"]
+font_size = 15
+font_color = Color(0.74, 0.86, 1, 1)
+outline_size = 2
+outline_color = Color(0, 0, 0, 0.36)
 
 [node name="RunSummary" type="Control"]
 layout_mode = 3
@@ -104,16 +122,207 @@ text = "Score: --"
 horizontal_alignment = 1
 label_settings = SubResource("2")
 
-[node name="BreakdownLabel" type="Label" parent="Card/Center"]
+[node name="BreakdownRow" type="HBoxContainer" parent="Card/Center"]
 layout_mode = 2
-text = "D: -- | P: -- | R: --"
+theme_override_constants/separation = 10
+
+[node name="DistanceCard" type="Panel" parent="Card/Center/BreakdownRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("7")
+
+[node name="VBox" type="VBoxContainer" parent="Card/Center/BreakdownRow/DistanceCard"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -10.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="Card/Center/BreakdownRow/DistanceCard/VBox"]
+layout_mode = 2
+text = "Distance"
+horizontal_alignment = 1
+label_settings = SubResource("8")
+
+[node name="Value" type="Label" parent="Card/Center/BreakdownRow/DistanceCard/VBox"]
+layout_mode = 2
+text = "--"
 horizontal_alignment = 1
 label_settings = SubResource("2")
 
-[node name="StatsLabel" type="Label" parent="Card/Center"]
+[node name="PickupCard" type="Panel" parent="Card/Center/BreakdownRow"]
 layout_mode = 2
-autowrap_mode = 2
-text = "Coins: -- | Dodges: -- | Max Pace: -- | Directive Tier: --"
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("7")
+
+[node name="VBox" type="VBoxContainer" parent="Card/Center/BreakdownRow/PickupCard"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -10.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="Card/Center/BreakdownRow/PickupCard/VBox"]
+layout_mode = 2
+text = "Pickup"
+horizontal_alignment = 1
+label_settings = SubResource("8")
+
+[node name="Value" type="Label" parent="Card/Center/BreakdownRow/PickupCard/VBox"]
+layout_mode = 2
+text = "--"
+horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="RiskCard" type="Panel" parent="Card/Center/BreakdownRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("7")
+
+[node name="VBox" type="VBoxContainer" parent="Card/Center/BreakdownRow/RiskCard"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -10.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="Card/Center/BreakdownRow/RiskCard/VBox"]
+layout_mode = 2
+text = "Risk"
+horizontal_alignment = 1
+label_settings = SubResource("8")
+
+[node name="Value" type="Label" parent="Card/Center/BreakdownRow/RiskCard/VBox"]
+layout_mode = 2
+text = "--"
+horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="StatsRow" type="HBoxContainer" parent="Card/Center"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CoinsCard" type="Panel" parent="Card/Center/StatsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("7")
+
+[node name="VBox" type="VBoxContainer" parent="Card/Center/StatsRow/CoinsCard"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -10.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="Card/Center/StatsRow/CoinsCard/VBox"]
+layout_mode = 2
+text = "Coins"
+horizontal_alignment = 1
+label_settings = SubResource("8")
+
+[node name="Value" type="Label" parent="Card/Center/StatsRow/CoinsCard/VBox"]
+layout_mode = 2
+text = "--"
+horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="DodgesCard" type="Panel" parent="Card/Center/StatsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("7")
+
+[node name="VBox" type="VBoxContainer" parent="Card/Center/StatsRow/DodgesCard"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -10.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="Card/Center/StatsRow/DodgesCard/VBox"]
+layout_mode = 2
+text = "Dodges"
+horizontal_alignment = 1
+label_settings = SubResource("8")
+
+[node name="Value" type="Label" parent="Card/Center/StatsRow/DodgesCard/VBox"]
+layout_mode = 2
+text = "--"
+horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="PaceCard" type="Panel" parent="Card/Center/StatsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("7")
+
+[node name="VBox" type="VBoxContainer" parent="Card/Center/StatsRow/PaceCard"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -10.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="Card/Center/StatsRow/PaceCard/VBox"]
+layout_mode = 2
+text = "Max Pace"
+horizontal_alignment = 1
+label_settings = SubResource("8")
+
+[node name="Value" type="Label" parent="Card/Center/StatsRow/PaceCard/VBox"]
+layout_mode = 2
+text = "--"
+horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="TierCard" type="Panel" parent="Card/Center/StatsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("7")
+
+[node name="VBox" type="VBoxContainer" parent="Card/Center/StatsRow/TierCard"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -10.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="Card/Center/StatsRow/TierCard/VBox"]
+layout_mode = 2
+text = "Directive"
+horizontal_alignment = 1
+label_settings = SubResource("8")
+
+[node name="Value" type="Label" parent="Card/Center/StatsRow/TierCard/VBox"]
+layout_mode = 2
+text = "--"
 horizontal_alignment = 1
 label_settings = SubResource("2")
 

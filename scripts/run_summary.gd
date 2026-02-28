@@ -1,8 +1,13 @@
 extends Control
 
 @onready var score_label: Label = $Card/Center/ScoreLabel
-@onready var breakdown_label: Label = $Card/Center/BreakdownLabel
-@onready var stats_label: Label = $Card/Center/StatsLabel
+@onready var distance_value_label: Label = $Card/Center/BreakdownRow/DistanceCard/VBox/Value
+@onready var pickup_value_label: Label = $Card/Center/BreakdownRow/PickupCard/VBox/Value
+@onready var risk_value_label: Label = $Card/Center/BreakdownRow/RiskCard/VBox/Value
+@onready var coins_value_label: Label = $Card/Center/StatsRow/CoinsCard/VBox/Value
+@onready var dodges_value_label: Label = $Card/Center/StatsRow/DodgesCard/VBox/Value
+@onready var pace_value_label: Label = $Card/Center/StatsRow/PaceCard/VBox/Value
+@onready var tier_value_label: Label = $Card/Center/StatsRow/TierCard/VBox/Value
 @onready var best_label: Label = $Card/Center/BestLabel
 @onready var play_again_button: Button = $Card/Center/PlayAgainButton
 @onready var menu_button: Button = $Card/Center/MenuButton
@@ -27,8 +32,13 @@ func _refresh_summary() -> void:
 
 	var best_suffix: String = " NEW BEST!" if is_new_best else ""
 	score_label.text = "Score: %d%s" % [last_score, best_suffix]
-	breakdown_label.text = "Distance %d | Pickup %d | Risk %d" % [distance_points, pickup_points, risk_points]
-	stats_label.text = "Coins %d | Dodges %d | Max Pace %d | Directive Tier %d" % [coins_collected, hazards_dodged, max_pace, mission_tier]
+	distance_value_label.text = str(distance_points)
+	pickup_value_label.text = str(pickup_points)
+	risk_value_label.text = str(risk_points)
+	coins_value_label.text = str(coins_collected)
+	dodges_value_label.text = str(hazards_dodged)
+	pace_value_label.text = str(max_pace)
+	tier_value_label.text = str(mission_tier)
 	best_label.text = "Best: %d" % best_score
 
 func _on_play_again_pressed() -> void:
