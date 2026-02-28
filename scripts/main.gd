@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.38"
+const BUILD_VERSION: String = "build-1.2.39"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -183,6 +183,8 @@ var mission_type: int = MissionType.COINS
 var mission_no_hit_start_x: float = 0.0
 var encounter_phase: int = EncounterPhase.PLATFORM_CHALLENGE
 var encounter_segments_left: int = 0
+var hazard_pressure_chaser_spawned: bool = false
+var last_segment_spawned_chaser: bool = false
 var hazards_dodged: int = 0
 var max_pace_level: int = 0
 
@@ -325,6 +327,7 @@ func _spawn_segment() -> void:
 	var hazard_mult: float = 1.0
 	var force_hazard: bool = false
 	var allow_chaser: bool = true
+	var force_chaser: bool = false
 	var branch_force: bool = false
 	var branch_mult: float = 1.0
 	var recovery_mode: bool = false
@@ -339,6 +342,8 @@ func _spawn_segment() -> void:
 			hazard_mult = 1.55
 			force_hazard = (segments_since_hazard_spawn >= 1) or (rng.randf() < 0.45)
 			allow_chaser = true
+			# Guarantee at least one chaser during each hazard-pressure phase.
+			force_chaser = (not hazard_pressure_chaser_spawned) and (encounter_segments_left <= 1)
 			branch_mult = 0.90
 		EncounterPhase.RECOVERY_WINDOW:
 			hazard_mult = 0.35
@@ -366,7 +371,9 @@ func _spawn_segment() -> void:
 	add_child(platform)
 
 	_place_coins(next_spawn_x, y, segment_len, lane, coin_mult, force_coin_arch)
-	var hazards_spawned: bool = _place_hazards(next_spawn_x, y, segment_len, lane, hazard_mult, force_hazard, allow_chaser)
+	var hazards_spawned: bool = _place_hazards(next_spawn_x, y, segment_len, lane, hazard_mult, force_hazard, allow_chaser, force_chaser)
+	if encounter_phase == EncounterPhase.HAZARD_PRESSURE and last_segment_spawned_chaser:
+		hazard_pressure_chaser_spawned = true
 	if hazards_spawned:
 		segments_since_hazard_spawn = 0
 	else:
@@ -399,6 +406,7 @@ func _spawn_segment() -> void:
 func _init_encounter_director() -> void:
 	encounter_phase = EncounterPhase.PLATFORM_CHALLENGE
 	encounter_segments_left = _encounter_length_for(encounter_phase)
+	hazard_pressure_chaser_spawned = false
 
 func _encounter_length_for(phase: int) -> int:
 	var tier_bonus: int = mini(2, int((mission_tier - 1) / 3))
@@ -428,6 +436,8 @@ func _encounter_name(phase: int = encounter_phase) -> String:
 func _advance_encounter_phase() -> void:
 	encounter_phase = (encounter_phase + 1) % 4
 	encounter_segments_left = _encounter_length_for(encounter_phase)
+	if encounter_phase == EncounterPhase.HAZARD_PRESSURE:
+		hazard_pressure_chaser_spawned = false
 	_set_info_notice("Encounter: %s" % _encounter_name(encounter_phase), 2.2)
 
 func _pick_segment_length() -> float:
@@ -752,9 +762,10 @@ func _place_coins(x: float, y: float, width: float, lane: int, reward_mult: floa
 			ability_pickups.append(pickup)
 			add_child(pickup)
 
-func _place_hazards(x: float, y: float, width: float, lane: int, encounter_mult: float = 1.0, force_spawn: bool = false, allow_chaser: bool = true) -> bool:
+func _place_hazards(x: float, y: float, width: float, lane: int, encounter_mult: float = 1.0, force_spawn: bool = false, allow_chaser: bool = true, force_chaser: bool = false) -> bool:
 	if lane > 2:
 		return false
+	last_segment_spawned_chaser = false
 	var pace_level: int = player.get_pace_level()
 	var hazard_mult: float = float(_current_biome().get("hazard_mult", 1.0))
 	var skip_chance: float = clampf((0.42 / hazard_mult) - (float(pace_level) * 0.024), 0.04, 0.62)
@@ -789,8 +800,9 @@ func _place_hazards(x: float, y: float, width: float, lane: int, encounter_mult:
 
 	var early_bonus: float = 0.10 if current_section <= 1 else 0.0
 	var chaser_chance: float = HAZARD_CHASER_CHANCE + BIOME_CHASER_BONUS[current_biome_index] + early_bonus + minf(0.18, float(pace_level) * 0.022)
-	if allow_chaser and width > 300.0 and rng.randf() < chaser_chance:
+	if allow_chaser and ((force_chaser and width > 220.0) or (width > 300.0 and rng.randf() < chaser_chance)):
 		_spawn_hazard_chaser(x, y, width)
+		last_segment_spawned_chaser = true
 
 	if rift_active and width > 320.0 and rng.randf() < 0.45:
 		var spike_x: float = x + rng.randf_range(120.0, width - 90.0)
