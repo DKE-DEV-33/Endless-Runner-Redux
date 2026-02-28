@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.37"
+const BUILD_VERSION: String = "build-1.2.38"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -1814,7 +1814,7 @@ func _finish_end_run() -> void:
 	get_tree().set_meta("best_score", best_score)
 	get_tree().set_meta("is_new_best", is_new_best)
 	get_tree().paused = false
-	get_tree().change_scene_to_file("res://scenes/Menu.tscn")
+	get_tree().change_scene_to_file("res://scenes/RunSummary.tscn")
 
 func _load_best_score() -> int:
 	var config: ConfigFile = ConfigFile.new()
