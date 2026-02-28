@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.36"
+const BUILD_VERSION: String = "build-1.2.37"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -85,6 +85,8 @@ const COIN_ARCH_CHANCE: float = 0.44
 const COIN_ARCH_MIN_WIDTH: float = 260.0
 const POWERUP_DEFAULT_FRACTION: float = 2.0
 const BIG_COIN_APEX_FRACTION: float = 3.2
+const BIOME_ARCH_BONUS: Array[float] = [0.0, 0.04, 0.20]
+const BIOME_CHASER_BONUS: Array[float] = [-0.04, 0.18, 0.02]
 const SECTION_COLORS: Array[Color] = [
 	Color(0.03, 0.05, 0.08), # Forge dusk
 	Color(0.05, 0.09, 0.15), # Reactor blue
@@ -719,6 +721,7 @@ func _place_coins(x: float, y: float, width: float, lane: int, reward_mult: floa
 	var base_coin_fraction: float = 1.0
 	var coin_y: float = _fractional_y(y, base_coin_fraction)
 	var arch_chance: float = COIN_ARCH_CHANCE
+	arch_chance += BIOME_ARCH_BONUS[current_biome_index]
 	if reward_mult > 1.0:
 		arch_chance = minf(0.9, arch_chance + ((reward_mult - 1.0) * 0.35))
 	var use_arch: bool = lane > 0 and width >= COIN_ARCH_MIN_WIDTH and (force_arch or (rng.randf() < arch_chance))
@@ -735,12 +738,13 @@ func _place_coins(x: float, y: float, width: float, lane: int, reward_mult: floa
 	if use_arch and width >= 300.0:
 		var reward_roll: float = rng.randf()
 		var reward_x: float = x + (width * 0.5)
-		if reward_roll < 0.62:
+		var big_coin_bias: float = 0.62 + (0.14 if current_biome_index == 2 else 0.0)
+		if reward_roll < big_coin_bias:
 			var big_coin_y: float = _fractional_y(y, BIG_COIN_APEX_FRACTION)
 			var big_coin: Area2D = _create_big_coin(Vector2(reward_x, big_coin_y))
 			big_coins.append(big_coin)
 			add_child(big_coin)
-		elif reward_roll < 0.76:
+		elif reward_roll < (0.78 if current_biome_index == 2 else 0.76):
 			# Rarely put a strategic pickup at arch apex.
 			var apex_pickup_y: float = _fractional_y(y, BIG_COIN_APEX_FRACTION)
 			var ability_kind: int = AbilityType.SHIELD if rng.randf() < 0.5 else AbilityType.CHRONO
@@ -772,6 +776,9 @@ func _place_hazards(x: float, y: float, width: float, lane: int, encounter_mult:
 	if rift_active:
 		pattern_roll += 0.18
 	pattern_roll += (hazard_mult - 1.0) * 0.12
+	if current_biome_index == 0:
+		# Foundry Rim leans into static clusters.
+		pattern_roll += 0.10
 
 	if pattern_roll < 0.34:
 		_spawn_hazard_single(x, y, width)
@@ -781,7 +788,7 @@ func _place_hazards(x: float, y: float, width: float, lane: int, encounter_mult:
 		_spawn_hazard_gate(x, y, width)
 
 	var early_bonus: float = 0.10 if current_section <= 1 else 0.0
-	var chaser_chance: float = HAZARD_CHASER_CHANCE + early_bonus + minf(0.18, float(pace_level) * 0.022)
+	var chaser_chance: float = HAZARD_CHASER_CHANCE + BIOME_CHASER_BONUS[current_biome_index] + early_bonus + minf(0.18, float(pace_level) * 0.022)
 	if allow_chaser and width > 300.0 and rng.randf() < chaser_chance:
 		_spawn_hazard_chaser(x, y, width)
 
