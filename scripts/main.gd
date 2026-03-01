@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.39"
+const BUILD_VERSION: String = "build-1.2.40"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -67,6 +67,9 @@ const ABILITY_PICKUP_BASE_CHANCE: float = 0.075
 const ABILITY_COOLDOWN_SECONDS: float = 16.0
 const SHIELD_HITS_GRANTED: int = 1
 const CHRONO_DURATION: float = 5.5
+const MAGNET_DURATION: float = 7.0
+const MAGNET_RADIUS: float = 220.0
+const MAGNET_PULL_SPEED: float = 560.0
 const HEALTH_COLOR_SAFE: Color = Color(0.88, 1.0, 0.88)
 const HEALTH_COLOR_WARN: Color = Color(1.0, 0.92, 0.52)
 const HEALTH_COLOR_CRIT: Color = Color(1.0, 0.52, 0.52)
@@ -162,6 +165,7 @@ var run_end_requested: bool = false
 var music_player: AudioStreamPlayer = AudioStreamPlayer.new()
 var shield_hits: int = 0
 var chrono_until: float = 0.0
+var magnet_until: float = 0.0
 var ability_cooldown_until: float = 0.0
 var rift_event_type: int = 0
 var rift_event_name: String = ""
@@ -176,7 +180,7 @@ var next_rift_at: float = 0.0
 
 enum MissionType { COINS, SURVIVE_TIME, NO_HIT_DISTANCE }
 enum PlatformType { SOLID, ONE_WAY_UP, DROP_THROUGH, GHOST }
-enum AbilityType { SHIELD, CHRONO }
+enum AbilityType { SHIELD, CHRONO, MAGNET }
 enum RiftEventType { NONE, COIN_SURGE, PHASE_LINE, EMBER_BREAKER }
 enum EncounterPhase { PLATFORM_CHALLENGE, HAZARD_PRESSURE, RECOVERY_WINDOW, REWARD_BURST }
 var mission_type: int = MissionType.COINS
@@ -256,6 +260,7 @@ func _process(delta: float) -> void:
 	_update_rift_state()
 	_update_section_progression()
 	_update_active_abilities()
+	_update_magnet_pull(delta)
 	_update_atmosphere_decor()
 	_update_parallax_layers()
 	_update_lane_guides()
@@ -757,7 +762,7 @@ func _place_coins(x: float, y: float, width: float, lane: int, reward_mult: floa
 		elif reward_roll < (0.78 if current_biome_index == 2 else 0.76):
 			# Rarely put a strategic pickup at arch apex.
 			var apex_pickup_y: float = _fractional_y(y, BIG_COIN_APEX_FRACTION)
-			var ability_kind: int = AbilityType.SHIELD if rng.randf() < 0.5 else AbilityType.CHRONO
+			var ability_kind: int = _roll_ability_kind()
 			var pickup: Area2D = _create_ability_pickup(Vector2(reward_x, apex_pickup_y), ability_kind)
 			ability_pickups.append(pickup)
 			add_child(pickup)
@@ -988,17 +993,25 @@ func _maybe_place_ability_pickup(x: float, y: float, width: float, lane: int) ->
 	if run_seconds < ability_cooldown_until:
 		return false
 	var chance: float = ABILITY_PICKUP_BASE_CHANCE
-	if shield_hits > 0 or chrono_until > run_seconds:
+	if shield_hits > 0 or chrono_until > run_seconds or magnet_until > run_seconds:
 		chance *= 0.35
 	if rng.randf() > chance:
 		return false
-	var kind: int = AbilityType.SHIELD if rng.randf() < 0.55 else AbilityType.CHRONO
+	var kind: int = _roll_ability_kind()
 	var ax: float = x + rng.randf_range(width * 0.30, width * 0.75)
 	var ay: float = _fractional_y(y, POWERUP_DEFAULT_FRACTION + 0.3)
 	var pickup: Area2D = _create_ability_pickup(Vector2(ax, ay), kind)
 	ability_pickups.append(pickup)
 	add_child(pickup)
 	return true
+
+func _roll_ability_kind() -> int:
+	var roll: float = rng.randf()
+	if roll < 0.45:
+		return AbilityType.SHIELD
+	if roll < 0.75:
+		return AbilityType.CHRONO
+	return AbilityType.MAGNET
 
 func _create_coin(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
@@ -1214,8 +1227,10 @@ func _create_ability_pickup(pos: Vector2, ability_kind: int) -> Area2D:
 	])
 	if ability_kind == AbilityType.SHIELD:
 		ring.color = Color(0.54, 0.93, 1.0, 0.82)
-	else:
+	elif ability_kind == AbilityType.CHRONO:
 		ring.color = Color(1.0, 0.86, 0.42, 0.84)
+	else:
+		ring.color = Color(0.86, 0.62, 1.0, 0.86)
 	area.add_child(ring)
 
 	var core: Polygon2D = Polygon2D.new()
@@ -1224,13 +1239,19 @@ func _create_ability_pickup(pos: Vector2, ability_kind: int) -> Area2D:
 			Vector2(-6, -3), Vector2(0, -10), Vector2(6, -3), Vector2(4, 7), Vector2(-4, 7)
 		])
 		core.color = Color(0.84, 0.98, 1.0)
-	else:
+	elif ability_kind == AbilityType.CHRONO:
 		# Hourglass silhouette is clearer than a tiny lightning bolt.
 		core.polygon = PackedVector2Array([
 			Vector2(-6, -9), Vector2(6, -9), Vector2(2, -3), Vector2(-2, -3),
 			Vector2(-2, 3), Vector2(2, 3), Vector2(6, 9), Vector2(-6, 9)
 		])
 		core.color = Color(1.0, 0.95, 0.74)
+	else:
+		core.polygon = PackedVector2Array([
+			Vector2(-7, -8), Vector2(-2, -8), Vector2(-2, 4), Vector2(2, 4), Vector2(2, -8), Vector2(7, -8),
+			Vector2(7, 8), Vector2(-7, 8)
+		])
+		core.color = Color(0.95, 0.88, 1.0)
 	area.add_child(core)
 
 	area.body_entered.connect(_on_ability_pickup_body_entered.bind(area))
@@ -1349,11 +1370,15 @@ func _on_ability_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 		shield_hits = SHIELD_HITS_GRANTED
 		_set_info_notice("Aegis acquired: next hit blocked", 2.8)
 		_play_sfx_tone(420.0, 0.16, -8.0)
-	else:
+	elif kind == AbilityType.CHRONO:
 		chrono_until = run_seconds + CHRONO_DURATION
 		Engine.time_scale = 0.84
 		_set_info_notice("Chrono surge: time dilated", 2.8)
 		_play_sfx_tone(300.0, 0.18, -8.0)
+	else:
+		magnet_until = run_seconds + MAGNET_DURATION
+		_set_info_notice("Magnet core online: relics draw inward", 2.8)
+		_play_sfx_tone(360.0, 0.16, -8.0)
 	ability_cooldown_until = run_seconds + ABILITY_COOLDOWN_SECONDS
 	_register_combo(1, "Ability chain", false)
 	ability_pickups.erase(pickup)
@@ -1510,8 +1535,35 @@ func _update_active_abilities() -> void:
 		player.modulate = Color(0.76, 0.96, 1.0, 1.0)
 	elif chrono_until > run_seconds:
 		player.modulate = Color(1.0, 0.92, 0.70, 1.0)
+	elif magnet_until > run_seconds:
+		player.modulate = Color(0.92, 0.82, 1.0, 1.0)
 	else:
 		player.modulate = Color(1, 1, 1, 1)
+
+func _update_magnet_pull(delta: float) -> void:
+	if magnet_until <= run_seconds:
+		return
+	var pull_target: Vector2 = player.global_position + Vector2(0.0, -18.0)
+	for coin: Area2D in coins:
+		if not is_instance_valid(coin):
+			continue
+		var to_target: Vector2 = pull_target - coin.global_position
+		var distance: float = to_target.length()
+		if distance <= 0.1 or distance > MAGNET_RADIUS:
+			continue
+		var max_step: float = MAGNET_PULL_SPEED * delta
+		var step: Vector2 = to_target.normalized() * minf(max_step, distance)
+		coin.global_position += step
+	for big_coin: Area2D in big_coins:
+		if not is_instance_valid(big_coin):
+			continue
+		var to_target: Vector2 = pull_target - big_coin.global_position
+		var distance: float = to_target.length()
+		if distance <= 0.1 or distance > MAGNET_RADIUS:
+			continue
+		var max_step: float = (MAGNET_PULL_SPEED * 0.86) * delta
+		var step: Vector2 = to_target.normalized() * minf(max_step, distance)
+		big_coin.global_position += step
 
 func _start_rift_event() -> void:
 	rift_event_progress = 0
@@ -1779,6 +1831,7 @@ func _refresh_legend_text() -> void:
 		"Green plus: restore 1 health.",
 		"Blue sigil: shield next hit.",
 		"Gold sigil: chrono slow-time.",
+		"Violet sigil: temporary coin magnet.",
 	]
 	var legend_text: String = "\n".join(lines)
 	legend_label.text = legend_text

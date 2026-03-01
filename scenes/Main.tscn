@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" path="res://assets/ui_icons/health_plus.svg" id="6"]
 [ext_resource type="Texture2D" path="res://assets/ui_icons/shield.svg" id="7"]
 [ext_resource type="Texture2D" path="res://assets/ui_icons/chrono_hourglass.svg" id="8"]
+[ext_resource type="Texture2D" path="res://assets/ui_icons/magnet_core.svg" id="9"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(36, 52)
@@ -420,6 +421,24 @@ layout_mode = 2
 size_flags_horizontal = 3
 autowrap_mode = 2
 text = "Gold sigil: chrono slow-time"
+label_settings = SubResource("3")
+
+[node name="MagnetRow" type="HBoxContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="MagnetIcon" type="TextureRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/MagnetRow"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("9")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="MagnetText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/MagnetRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 2
+text = "Violet sigil: temporary coin magnet"
 label_settings = SubResource("3")
 
 [node name="Hazards" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]
