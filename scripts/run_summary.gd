@@ -9,6 +9,7 @@ extends Control
 @onready var pace_value_label: Label = $Card/Center/StatsRow/PaceCard/VBox/Value
 @onready var tier_value_label: Label = $Card/Center/StatsRow/TierCard/VBox/Value
 @onready var best_label: Label = $Card/Center/BestLabel
+@onready var credits_label: Label = $Card/Center/CreditsLabel
 @onready var play_again_button: Button = $Card/Center/PlayAgainButton
 @onready var menu_button: Button = $Card/Center/MenuButton
 
@@ -40,7 +41,8 @@ func _refresh_summary() -> void:
 	dodges_value_label.text = str(hazards_dodged)
 	pace_value_label.text = str(max_pace)
 	tier_value_label.text = str(mission_tier)
-	best_label.text = "Best Run: %d\nCredits: +%d (Total %d)" % [best_score, credits_earned, total_credits]
+	best_label.text = "Best Run: %d" % best_score
+	credits_label.text = "Credits: +%d (Total %d)" % [credits_earned, total_credits]
 	if is_new_best:
 		best_label.text += " | New personal best"
 

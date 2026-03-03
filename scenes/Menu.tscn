@@ -93,9 +93,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -240.0
-offset_top = -288.0
+offset_top = -340.0
 offset_right = 240.0
-offset_bottom = 288.0
+offset_bottom = 340.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("3")
@@ -110,8 +110,8 @@ offset_right = -24.0
 offset_bottom = -24.0
 grow_horizontal = 2
 grow_vertical = 2
-alignment = 1
-theme_override_constants/separation = 14
+alignment = 0
+theme_override_constants/separation = 10
 
 [node name="Title" type="Label" parent="Card/Center"]
 layout_mode = 2
@@ -143,6 +143,7 @@ label_settings = SubResource("2")
 [node name="ArmoryCard" type="Panel" parent="Card/Center"]
 layout_mode = 2
 size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 210)
 theme_override_styles/panel = SubResource("7")
 
 [node name="VBox" type="VBoxContainer" parent="Card/Center/ArmoryCard"]

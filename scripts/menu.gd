@@ -105,8 +105,8 @@ func _refresh_score_labels() -> void:
 
 	if has_last:
 		var suffix: String = " NEW BEST!" if is_new_best else ""
-		last_score_label.text = "Last Run: %d%s\nDistance: %d   Pickups: %d   Risk: %d" % [last_score, suffix, last_distance, last_pickup, last_risk]
-		summary_label.text = "Coins: %d   Dodges: %d\nMax Pace: %d   Directive Tier: %d\nCredits Earned: %d" % [last_coins, last_dodges, last_max_pace, last_tier, last_credits_earned]
+		last_score_label.text = "Last Run: %d%s\nD: %d   P: %d   R: %d" % [last_score, suffix, last_distance, last_pickup, last_risk]
+		summary_label.text = "Coins: %d   Dodges: %d\nPace: %d   Tier: %d   +%d Credits" % [last_coins, last_dodges, last_max_pace, last_tier, last_credits_earned]
 	else:
 		last_score_label.text = "Last Run: --"
 		summary_label.text = "Run Summary: --"
@@ -173,11 +173,11 @@ func _set_perk_level(key: String, level: int) -> void:
 func _perk_display_name(key: String) -> String:
 	match key:
 		"vitality":
-			return "Vitality (+1 max/start HP)"
+			return "Vitality"
 		"coin_value":
-			return "Coin Value (+5% score)"
+			return "Coin Value"
 		"fireguard":
-			return "Fireguard (+1s duration)"
+			return "Fireguard"
 	return key
 
 func _button_text_for_perk(key: String) -> String:
@@ -185,7 +185,7 @@ func _button_text_for_perk(key: String) -> String:
 	if level >= PERK_MAX_LEVEL:
 		return "%s Lv %d/%d (MAX)" % [_perk_display_name(key), level, PERK_MAX_LEVEL]
 	var cost: int = _perk_cost(key, level)
-	return "%s Lv %d/%d (Cost: %d)" % [_perk_display_name(key), level, PERK_MAX_LEVEL, cost]
+	return "%s Lv %d/%d - %dc" % [_perk_display_name(key), level, PERK_MAX_LEVEL, cost]
 
 func _refresh_armory_ui() -> void:
 	credits_label.text = "Credits: %d" % credits
@@ -203,6 +203,7 @@ func _refresh_armory_ui() -> void:
 	vitality_button.disabled = vitality_level >= PERK_MAX_LEVEL or (vitality_cost > 0 and credits < vitality_cost)
 	coin_value_button.disabled = coin_level >= PERK_MAX_LEVEL or (coin_cost > 0 and credits < coin_cost)
 	fireguard_button.disabled = fireguard_level >= PERK_MAX_LEVEL or (fireguard_cost > 0 and credits < fireguard_cost)
+	armory_hint_label.text = "V:+%d HP  C:+%d%% coin score  F:+%ds fireguard" % [vitality_level, coin_level * 5, fireguard_level]
 
 func _try_purchase_perk(key: String) -> void:
 	var level: int = _perk_level(key)
