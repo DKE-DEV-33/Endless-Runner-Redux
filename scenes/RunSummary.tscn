@@ -122,6 +122,13 @@ text = "Run Score: --"
 horizontal_alignment = 1
 label_settings = SubResource("2")
 
+[node name="StatsSummaryLabel" type="Label" parent="Card/Center"]
+layout_mode = 2
+text = "Distance: -- | Pickups: -- | Risk: --\nCoins: -- | Dodges: -- | Pace: -- | Directive: --"
+horizontal_alignment = 1
+autowrap_mode = 2
+label_settings = SubResource("2")
+
 [node name="BreakdownRow" type="HBoxContainer" parent="Card/Center"]
 layout_mode = 2
 theme_override_constants/separation = 10

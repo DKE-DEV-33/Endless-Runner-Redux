@@ -1,6 +1,9 @@
 extends Control
 
 @onready var score_label: Label = $Card/Center/ScoreLabel
+@onready var stats_summary_label: Label = $Card/Center/StatsSummaryLabel
+@onready var breakdown_row: HBoxContainer = $Card/Center/BreakdownRow
+@onready var stats_row: HBoxContainer = $Card/Center/StatsRow
 @onready var distance_value_label: Label = $Card/Center/BreakdownRow/DistanceCard/VBox/Value
 @onready var pickup_value_label: Label = $Card/Center/BreakdownRow/PickupCard/VBox/Value
 @onready var risk_value_label: Label = $Card/Center/BreakdownRow/RiskCard/VBox/Value
@@ -17,6 +20,9 @@ extends Control
 func _ready() -> void:
 	play_again_button.pressed.connect(_on_play_again_pressed)
 	menu_button.pressed.connect(_on_menu_pressed)
+	# Keep the old card rows for future polish, but hide for now to prevent overlap at this card size.
+	breakdown_row.visible = false
+	stats_row.visible = false
 	_refresh_summary()
 
 func _refresh_summary() -> void:
@@ -43,6 +49,7 @@ func _refresh_summary() -> void:
 	dodges_value_label.text = str(hazards_dodged)
 	pace_value_label.text = str(max_pace)
 	tier_value_label.text = str(mission_tier)
+	stats_summary_label.text = "Distance: %d   Pickups: %d   Risk: %d\nCoins: %d   Dodges: %d   Pace: %d   Directive: %d" % [distance_points, pickup_points, risk_points, coins_collected, hazards_dodged, max_pace, mission_tier]
 	best_label.text = "Best Run: %d" % best_score
 	credits_label.text = "Credits: +%d (Total %d)" % [credits_earned, total_credits]
 	relics_label.text = "Relics: %s" % relics_text
