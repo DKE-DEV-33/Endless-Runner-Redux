@@ -338,6 +338,13 @@ text = "Credits: +0 (Total 0)"
 horizontal_alignment = 1
 label_settings = SubResource("2")
 
+[node name="RelicsLabel" type="Label" parent="Card/Center"]
+layout_mode = 2
+text = "Relics: None"
+horizontal_alignment = 1
+autowrap_mode = 2
+label_settings = SubResource("2")
+
 [node name="Spacer" type="Control" parent="Card/Center"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 8)

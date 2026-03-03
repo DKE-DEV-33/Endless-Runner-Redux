@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.43"
+const BUILD_VERSION: String = "build-1.2.44"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -22,6 +22,15 @@ const PERK_MAX_LEVEL: int = 3
 const VITALITY_HEALTH_PER_LEVEL: int = 1
 const COIN_VALUE_BONUS_PER_LEVEL: float = 0.05
 const FIREGUARD_BONUS_SECONDS_PER_LEVEL: float = 1.0
+const RELIC_SECTION_INTERVAL: int = 3
+const STARTER_RELICS: Array[String] = [
+	"aegis_shard",
+	"coin_lens",
+	"chrono_spool",
+	"firecore",
+	"magnet_array",
+	"vitality_cell",
+]
 const COINS_PER_BONUS_HEART: int = 100
 const SECTION_LENGTH: float = 2300.0
 const ALT_ROUTE_VERTICAL_GAP_MIN: float = 104.0
@@ -178,6 +187,11 @@ var ability_cooldown_until: float = 0.0
 var perk_vitality_level: int = 0
 var perk_coin_value_level: int = 0
 var perk_fireguard_level: int = 0
+var run_relics: Array[String] = []
+var run_coin_bonus_mult: float = 0.0
+var run_chrono_bonus_sec: float = 0.0
+var run_fireguard_bonus_sec: float = 0.0
+var run_magnet_bonus_radius: float = 0.0
 var rift_event_type: int = 0
 var rift_event_name: String = ""
 var rift_event_target: int = 0
@@ -224,6 +238,7 @@ func _ready() -> void:
 	_load_audio_settings()
 	_load_display_settings()
 	_load_progression_perks()
+	_init_run_relics()
 	health = mini(max_health_cap, 3 + perk_vitality_level)
 	player.global_position = Vector2(120.0, 408.0)
 	player.velocity = Vector2.ZERO
@@ -1403,12 +1418,12 @@ func _on_ability_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 		_set_info_notice("Aegis acquired: next hit blocked", 2.8)
 		_play_sfx_tone(420.0, 0.16, -8.0)
 	elif kind == AbilityType.CHRONO:
-		chrono_until = run_seconds + CHRONO_DURATION
+		chrono_until = run_seconds + CHRONO_DURATION + run_chrono_bonus_sec
 		Engine.time_scale = 0.84
 		_set_info_notice("Chrono surge: time dilated", 2.8)
 		_play_sfx_tone(300.0, 0.18, -8.0)
 	elif kind == AbilityType.FIREGUARD:
-		fireguard_until = run_seconds + FIREGUARD_DURATION + (float(perk_fireguard_level) * FIREGUARD_BONUS_SECONDS_PER_LEVEL)
+		fireguard_until = run_seconds + FIREGUARD_DURATION + (float(perk_fireguard_level) * FIREGUARD_BONUS_SECONDS_PER_LEVEL) + run_fireguard_bonus_sec
 		_set_info_notice("Fireguard online: chasers pass through harmlessly", 2.8)
 		_play_sfx_tone(640.0, 0.14, -8.0)
 	else:
@@ -1581,13 +1596,14 @@ func _update_active_abilities() -> void:
 func _update_magnet_pull(delta: float) -> void:
 	if magnet_until <= run_seconds:
 		return
+	var magnet_radius: float = MAGNET_RADIUS + run_magnet_bonus_radius
 	var pull_target: Vector2 = player.global_position + Vector2(0.0, -18.0)
 	for coin: Area2D in coins:
 		if not is_instance_valid(coin):
 			continue
 		var to_target: Vector2 = pull_target - coin.global_position
 		var distance: float = to_target.length()
-		if distance <= 0.1 or distance > MAGNET_RADIUS:
+		if distance <= 0.1 or distance > magnet_radius:
 			continue
 		var max_step: float = MAGNET_PULL_SPEED * delta
 		var step: Vector2 = to_target.normalized() * minf(max_step, distance)
@@ -1597,7 +1613,7 @@ func _update_magnet_pull(delta: float) -> void:
 			continue
 		var to_target: Vector2 = pull_target - big_coin.global_position
 		var distance: float = to_target.length()
-		if distance <= 0.1 or distance > MAGNET_RADIUS:
+		if distance <= 0.1 or distance > magnet_radius:
 			continue
 		var max_step: float = (MAGNET_PULL_SPEED * 0.86) * delta
 		var step: Vector2 = to_target.normalized() * minf(max_step, distance)
@@ -1689,6 +1705,7 @@ func _update_section_progression() -> void:
 		current_section += 1
 		_apply_biome_for_section(current_section)
 		_apply_section_theme(current_section)
+		_grant_relic_for_section(current_section)
 		_increment_pace_level(1, "Sector shift")
 		_play_sfx_tone(640.0, 0.12, -9.0)
 
@@ -1812,7 +1829,7 @@ func _apply_health_delta(delta: int) -> void:
 	_refresh_health_label()
 
 func _coin_points(multiplier: int = 1) -> int:
-	var bonus_mult: float = 1.0 + (float(perk_coin_value_level) * COIN_VALUE_BONUS_PER_LEVEL)
+	var bonus_mult: float = 1.0 + (float(perk_coin_value_level) * COIN_VALUE_BONUS_PER_LEVEL) + run_coin_bonus_mult
 	var points: float = float(25 * multiplier) * bonus_mult
 	return maxi(1, int(round(points)))
 
@@ -1928,6 +1945,7 @@ func _finish_end_run() -> void:
 	get_tree().set_meta("new_best", is_new_best)
 	get_tree().set_meta("last_credits_earned", credits_earned)
 	get_tree().set_meta("total_credits", total_credits)
+	get_tree().set_meta("last_relics", _run_relics_text())
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/RunSummary.tscn")
 
@@ -1956,6 +1974,66 @@ func _load_progression_perks() -> void:
 		perk_coin_value_level = clampi(int(config.get_value("progression", "perk_coin_value", 0)), 0, PERK_MAX_LEVEL)
 		perk_fireguard_level = clampi(int(config.get_value("progression", "perk_fireguard", 0)), 0, PERK_MAX_LEVEL)
 	max_health_cap = MAX_HEALTH + (perk_vitality_level * VITALITY_HEALTH_PER_LEVEL)
+
+func _init_run_relics() -> void:
+	run_relics.clear()
+	run_coin_bonus_mult = 0.0
+	run_chrono_bonus_sec = 0.0
+	run_fireguard_bonus_sec = 0.0
+	run_magnet_bonus_radius = 0.0
+
+func _grant_relic_for_section(section_index: int) -> void:
+	if section_index <= 0 or (section_index % RELIC_SECTION_INTERVAL) != 0:
+		return
+	var available: Array[String] = []
+	for relic_id: String in STARTER_RELICS:
+		if not run_relics.has(relic_id):
+			available.append(relic_id)
+	if available.is_empty():
+		return
+	var picked: String = available[rng.randi_range(0, available.size() - 1)]
+	run_relics.append(picked)
+	_apply_relic_effect(picked)
+	_set_info_notice("Relic acquired: %s" % _relic_display_name(picked), 2.4)
+
+func _apply_relic_effect(relic_id: String) -> void:
+	match relic_id:
+		"aegis_shard":
+			shield_hits = maxi(shield_hits, 1)
+		"coin_lens":
+			run_coin_bonus_mult += 0.10
+		"chrono_spool":
+			run_chrono_bonus_sec += 1.0
+		"firecore":
+			run_fireguard_bonus_sec += 1.0
+		"magnet_array":
+			run_magnet_bonus_radius += 50.0
+		"vitality_cell":
+			_apply_health_delta(1)
+
+func _relic_display_name(relic_id: String) -> String:
+	match relic_id:
+		"aegis_shard":
+			return "Aegis Shard"
+		"coin_lens":
+			return "Coin Lens"
+		"chrono_spool":
+			return "Chrono Spool"
+		"firecore":
+			return "Firecore Prism"
+		"magnet_array":
+			return "Magnet Array"
+		"vitality_cell":
+			return "Vitality Cell"
+	return relic_id
+
+func _run_relics_text() -> String:
+	if run_relics.is_empty():
+		return "None"
+	var names: Array[String] = []
+	for relic_id: String in run_relics:
+		names.append(_relic_display_name(relic_id))
+	return ", ".join(names)
 
 func _compute_credits_earned(run_score: int) -> int:
 	var score_component: int = int(floor(float(run_score) / 220.0))

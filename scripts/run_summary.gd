@@ -10,6 +10,7 @@ extends Control
 @onready var tier_value_label: Label = $Card/Center/StatsRow/TierCard/VBox/Value
 @onready var best_label: Label = $Card/Center/BestLabel
 @onready var credits_label: Label = $Card/Center/CreditsLabel
+@onready var relics_label: Label = $Card/Center/RelicsLabel
 @onready var play_again_button: Button = $Card/Center/PlayAgainButton
 @onready var menu_button: Button = $Card/Center/MenuButton
 
@@ -32,6 +33,7 @@ func _refresh_summary() -> void:
 	var mission_tier: int = int(get_tree().get_meta("last_mission_tier", 1))
 	var credits_earned: int = int(get_tree().get_meta("last_credits_earned", 0))
 	var total_credits: int = int(get_tree().get_meta("total_credits", 0))
+	var relics_text: String = String(get_tree().get_meta("last_relics", "None"))
 
 	score_label.text = "Run Score: %d" % last_score
 	distance_value_label.text = str(distance_points)
@@ -43,6 +45,7 @@ func _refresh_summary() -> void:
 	tier_value_label.text = str(mission_tier)
 	best_label.text = "Best Run: %d" % best_score
 	credits_label.text = "Credits: +%d (Total %d)" % [credits_earned, total_credits]
+	relics_label.text = "Relics: %s" % relics_text
 	if is_new_best:
 		best_label.text += " | New personal best"
 
