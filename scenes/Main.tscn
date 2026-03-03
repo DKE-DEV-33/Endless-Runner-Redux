@@ -473,3 +473,72 @@ text = "Close"
 theme_override_styles/normal = SubResource("5")
 theme_override_styles/hover = SubResource("6")
 theme_override_styles/pressed = SubResource("7")
+
+[node name="RelicDraftOverlay" type="ColorRect" parent="PauseLayer"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+color = Color(0, 0, 0, 0.72)
+
+[node name="DraftPanel" type="Panel" parent="PauseLayer/RelicDraftOverlay"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -360.0
+offset_top = -220.0
+offset_right = 360.0
+offset_bottom = 220.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("4")
+
+[node name="VBox" type="VBoxContainer" parent="PauseLayer/RelicDraftOverlay/DraftPanel"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 22.0
+offset_right = -24.0
+offset_bottom = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="PauseLayer/RelicDraftOverlay/DraftPanel/VBox"]
+layout_mode = 2
+text = "Relic Draft"
+horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="SubtitleLabel" type="Label" parent="PauseLayer/RelicDraftOverlay/DraftPanel/VBox"]
+layout_mode = 2
+text = "Choose one relic for this run."
+horizontal_alignment = 1
+label_settings = SubResource("3")
+
+[node name="ChoiceAButton" type="Button" parent="PauseLayer/RelicDraftOverlay/DraftPanel/VBox"]
+layout_mode = 2
+text = "Choice A"
+theme_override_styles/normal = SubResource("5")
+theme_override_styles/hover = SubResource("6")
+theme_override_styles/pressed = SubResource("7")
+
+[node name="ChoiceBButton" type="Button" parent="PauseLayer/RelicDraftOverlay/DraftPanel/VBox"]
+layout_mode = 2
+text = "Choice B"
+theme_override_styles/normal = SubResource("5")
+theme_override_styles/hover = SubResource("6")
+theme_override_styles/pressed = SubResource("7")
+
+[node name="ChoiceCButton" type="Button" parent="PauseLayer/RelicDraftOverlay/DraftPanel/VBox"]
+layout_mode = 2
+text = "Choice C"
+theme_override_styles/normal = SubResource("5")
+theme_override_styles/hover = SubResource("6")
+theme_override_styles/pressed = SubResource("7")

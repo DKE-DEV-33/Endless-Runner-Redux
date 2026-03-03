@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.44"
+const BUILD_VERSION: String = "build-1.2.45"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -23,6 +23,7 @@ const VITALITY_HEALTH_PER_LEVEL: int = 1
 const COIN_VALUE_BONUS_PER_LEVEL: float = 0.05
 const FIREGUARD_BONUS_SECONDS_PER_LEVEL: float = 1.0
 const RELIC_SECTION_INTERVAL: int = 3
+const RELIC_DRAFT_CHOICES: int = 3
 const STARTER_RELICS: Array[String] = [
 	"aegis_shard",
 	"coin_lens",
@@ -142,6 +143,11 @@ const GAMEPLAY_MUSIC_PATH: String = "res://assets/audio/gameplay_music.mp3"
 @onready var menu_button: Button = $PauseLayer/PausePanel/VBox/MenuButton
 @onready var pause_rules_overlay: ColorRect = $PauseLayer/PauseRulesOverlay
 @onready var pause_rules_close_button: Button = $PauseLayer/PauseRulesOverlay/RulesPanel/VBox/CloseButton
+@onready var relic_draft_overlay: ColorRect = $PauseLayer/RelicDraftOverlay
+@onready var relic_draft_subtitle_label: Label = $PauseLayer/RelicDraftOverlay/DraftPanel/VBox/SubtitleLabel
+@onready var relic_choice_a_button: Button = $PauseLayer/RelicDraftOverlay/DraftPanel/VBox/ChoiceAButton
+@onready var relic_choice_b_button: Button = $PauseLayer/RelicDraftOverlay/DraftPanel/VBox/ChoiceBButton
+@onready var relic_choice_c_button: Button = $PauseLayer/RelicDraftOverlay/DraftPanel/VBox/ChoiceCButton
 @onready var master_slider: HSlider = $PauseLayer/PausePanel/VBox/MasterSlider
 @onready var sfx_slider: HSlider = $PauseLayer/PausePanel/VBox/SfxSlider
 
@@ -188,6 +194,8 @@ var perk_vitality_level: int = 0
 var perk_coin_value_level: int = 0
 var perk_fireguard_level: int = 0
 var run_relics: Array[String] = []
+var relic_draft_options: Array[String] = []
+var relic_draft_active: bool = false
 var run_coin_bonus_mult: float = 0.0
 var run_chrono_bonus_sec: float = 0.0
 var run_fireguard_bonus_sec: float = 0.0
@@ -266,6 +274,8 @@ func _ready() -> void:
 	_setup_pause_ui()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if relic_draft_active:
+		return
 	if event.is_action_pressed("ui_cancel"):
 		if pause_rules_overlay.visible:
 			_hide_pause_rules()
@@ -1705,7 +1715,8 @@ func _update_section_progression() -> void:
 		current_section += 1
 		_apply_biome_for_section(current_section)
 		_apply_section_theme(current_section)
-		_grant_relic_for_section(current_section)
+		if _grant_relic_for_section(current_section):
+			break
 		_increment_pace_level(1, "Sector shift")
 		_play_sfx_tone(640.0, 0.12, -9.0)
 
@@ -1982,19 +1993,61 @@ func _init_run_relics() -> void:
 	run_fireguard_bonus_sec = 0.0
 	run_magnet_bonus_radius = 0.0
 
-func _grant_relic_for_section(section_index: int) -> void:
+func _grant_relic_for_section(section_index: int) -> bool:
 	if section_index <= 0 or (section_index % RELIC_SECTION_INTERVAL) != 0:
-		return
+		return false
 	var available: Array[String] = []
 	for relic_id: String in STARTER_RELICS:
 		if not run_relics.has(relic_id):
 			available.append(relic_id)
 	if available.is_empty():
+		return false
+	var choices: Array[String] = []
+	var pool: Array[String] = []
+	for relic_id: String in available:
+		pool.append(relic_id)
+	var target_count: int = mini(RELIC_DRAFT_CHOICES, pool.size())
+	while choices.size() < target_count:
+		var idx: int = rng.randi_range(0, pool.size() - 1)
+		choices.append(pool[idx])
+		pool.remove_at(idx)
+	_start_relic_draft(choices)
+	return true
+
+func _start_relic_draft(choices: Array[String]) -> void:
+	relic_draft_options = choices
+	relic_draft_active = true
+	relic_draft_overlay.visible = true
+	pause_backdrop.visible = false
+	pause_panel.visible = false
+	pause_rules_overlay.visible = false
+	get_tree().paused = true
+	relic_draft_subtitle_label.text = "Choose one relic for this run."
+	relic_choice_a_button.visible = false
+	relic_choice_b_button.visible = false
+	relic_choice_c_button.visible = false
+	if relic_draft_options.size() > 0:
+		relic_choice_a_button.visible = true
+		relic_choice_a_button.text = _relic_choice_text(relic_draft_options[0])
+	if relic_draft_options.size() > 1:
+		relic_choice_b_button.visible = true
+		relic_choice_b_button.text = _relic_choice_text(relic_draft_options[1])
+	if relic_draft_options.size() > 2:
+		relic_choice_c_button.visible = true
+		relic_choice_c_button.text = _relic_choice_text(relic_draft_options[2])
+
+func _on_relic_choice_pressed(choice_index: int) -> void:
+	if choice_index < 0 or choice_index >= relic_draft_options.size():
 		return
-	var picked: String = available[rng.randi_range(0, available.size() - 1)]
+	var picked: String = relic_draft_options[choice_index]
 	run_relics.append(picked)
 	_apply_relic_effect(picked)
+	relic_draft_options.clear()
+	relic_draft_active = false
+	relic_draft_overlay.visible = false
+	get_tree().paused = false
 	_set_info_notice("Relic acquired: %s" % _relic_display_name(picked), 2.4)
+	_play_sfx_tone(760.0, 0.12, -8.0)
 
 func _apply_relic_effect(relic_id: String) -> void:
 	match relic_id:
@@ -2026,6 +2079,25 @@ func _relic_display_name(relic_id: String) -> String:
 		"vitality_cell":
 			return "Vitality Cell"
 	return relic_id
+
+func _relic_effect_text(relic_id: String) -> String:
+	match relic_id:
+		"aegis_shard":
+			return "Gain a shield charge now."
+		"coin_lens":
+			return "+10% coin score value this run."
+		"chrono_spool":
+			return "+1s chrono duration this run."
+		"firecore":
+			return "+1s fireguard duration this run."
+		"magnet_array":
+			return "+50 magnet pickup radius this run."
+		"vitality_cell":
+			return "Restore 1 health immediately."
+	return ""
+
+func _relic_choice_text(relic_id: String) -> String:
+	return "%s | %s" % [_relic_display_name(relic_id), _relic_effect_text(relic_id)]
 
 func _run_relics_text() -> String:
 	if run_relics.is_empty():
@@ -2064,13 +2136,18 @@ func _setup_pause_ui() -> void:
 	pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	pause_panel.process_mode = Node.PROCESS_MODE_ALWAYS
 	pause_backdrop.process_mode = Node.PROCESS_MODE_ALWAYS
+	relic_draft_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
 	pause_backdrop.visible = false
 	pause_panel.visible = false
 	pause_rules_overlay.visible = false
+	relic_draft_overlay.visible = false
 
 	pause_window_size_button.pressed.connect(_on_pause_window_size_pressed)
 	pause_rules_button.pressed.connect(_on_pause_rules_pressed)
 	pause_rules_close_button.pressed.connect(_hide_pause_rules)
+	relic_choice_a_button.pressed.connect(_on_relic_choice_pressed.bind(0))
+	relic_choice_b_button.pressed.connect(_on_relic_choice_pressed.bind(1))
+	relic_choice_c_button.pressed.connect(_on_relic_choice_pressed.bind(2))
 	resume_button.pressed.connect(_on_resume_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
 	menu_button.pressed.connect(_on_menu_pressed)
@@ -2082,6 +2159,8 @@ func _setup_pause_ui() -> void:
 	_refresh_window_size_button()
 
 func _toggle_pause_menu() -> void:
+	if relic_draft_active:
+		return
 	var opening: bool = not pause_panel.visible
 	if not opening:
 		_hide_pause_rules()
