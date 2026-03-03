@@ -19,8 +19,8 @@ func _ready() -> void:
 
 func _refresh_summary() -> void:
 	var last_score: int = int(get_tree().get_meta("last_score", 0))
-	var best_score: int = int(get_tree().get_meta("best_score", 0))
-	var is_new_best: bool = bool(get_tree().get_meta("is_new_best", false))
+	var best_score: int = int(get_tree().get_meta("last_best_score", get_tree().get_meta("best_score", 0)))
+	var is_new_best: bool = bool(get_tree().get_meta("is_new_best", false)) or bool(get_tree().get_meta("new_best", false))
 
 	var distance_points: int = int(get_tree().get_meta("last_distance_points", 0))
 	var pickup_points: int = int(get_tree().get_meta("last_pickup_points", 0))
@@ -30,8 +30,7 @@ func _refresh_summary() -> void:
 	var max_pace: int = int(get_tree().get_meta("last_max_pace", 0))
 	var mission_tier: int = int(get_tree().get_meta("last_mission_tier", 1))
 
-	var best_suffix: String = " NEW BEST!" if is_new_best else ""
-	score_label.text = "Score: %d%s" % [last_score, best_suffix]
+	score_label.text = "Run Score: %d" % last_score
 	distance_value_label.text = str(distance_points)
 	pickup_value_label.text = str(pickup_points)
 	risk_value_label.text = str(risk_points)
@@ -39,7 +38,9 @@ func _refresh_summary() -> void:
 	dodges_value_label.text = str(hazards_dodged)
 	pace_value_label.text = str(max_pace)
 	tier_value_label.text = str(mission_tier)
-	best_label.text = "Best: %d" % best_score
+	best_label.text = "Best Run: %d" % best_score
+	if is_new_best:
+		best_label.text += " | New personal best"
 
 func _on_play_again_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/Main.tscn")

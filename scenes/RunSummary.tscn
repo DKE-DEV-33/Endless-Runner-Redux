@@ -118,7 +118,7 @@ label_settings = SubResource("1")
 
 [node name="ScoreLabel" type="Label" parent="Card/Center"]
 layout_mode = 2
-text = "Score: --"
+text = "Run Score: --"
 horizontal_alignment = 1
 label_settings = SubResource("2")
 
@@ -172,7 +172,7 @@ grow_vertical = 2
 
 [node name="Title" type="Label" parent="Card/Center/BreakdownRow/PickupCard/VBox"]
 layout_mode = 2
-text = "Pickup"
+text = "Pickups"
 horizontal_alignment = 1
 label_settings = SubResource("8")
 
@@ -328,7 +328,7 @@ label_settings = SubResource("2")
 
 [node name="BestLabel" type="Label" parent="Card/Center"]
 layout_mode = 2
-text = "Best: --"
+text = "Best Run: --"
 horizontal_alignment = 1
 label_settings = SubResource("2")
 
