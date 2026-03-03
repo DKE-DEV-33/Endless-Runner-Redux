@@ -24,6 +24,11 @@ const COIN_VALUE_BONUS_PER_LEVEL: float = 0.05
 const FIREGUARD_BONUS_SECONDS_PER_LEVEL: float = 1.0
 const RELIC_SECTION_INTERVAL: int = 3
 const RELIC_DRAFT_CHOICES: int = 3
+const BIOME_THEME_COLORS: Array[Color] = [
+	Color(0.04, 0.07, 0.12), # Foundry Rim (cool steel blue)
+	Color(0.05, 0.16, 0.20), # Rift Span (teal-cyan)
+	Color(0.17, 0.07, 0.08), # Ember Vault (red-ember)
+]
 const STARTER_RELICS: Array[String] = [
 	"aegis_shard",
 	"coin_lens",
@@ -132,6 +137,7 @@ const GAMEPLAY_MUSIC_PATH: String = "res://assets/audio/gameplay_music.mp3"
 @onready var info_label: Label = $CanvasLayer/InfoLabel
 @onready var legend_label: Label = $CanvasLayer/LegendLabel
 @onready var version_label: Label = $CanvasLayer/VersionLabel
+@onready var relic_flash: ColorRect = $CanvasLayer/RelicFlash
 @onready var pause_layer: CanvasLayer = $PauseLayer
 @onready var pause_backdrop: ColorRect = $PauseLayer/PauseBackdrop
 @onready var pause_panel: Panel = $PauseLayer/PausePanel
@@ -195,7 +201,9 @@ var perk_coin_value_level: int = 0
 var perk_fireguard_level: int = 0
 var run_relics: Array[String] = []
 var relic_draft_options: Array[String] = []
+var relic_draft_pending_options: Array[String] = []
 var relic_draft_active: bool = false
+var relic_flash_until: float = 0.0
 var run_coin_bonus_mult: float = 0.0
 var run_chrono_bonus_sec: float = 0.0
 var run_fireguard_bonus_sec: float = 0.0
@@ -306,6 +314,7 @@ func _process(delta: float) -> void:
 	_update_combo_timeout()
 	_update_rift_event_progress()
 	_animate_runtime_visuals(delta)
+	_update_relic_flash()
 	_ensure_music_playing()
 	_refresh_info_label()
 
@@ -329,6 +338,7 @@ func _process(delta: float) -> void:
 	mission_label.text = _mission_text()
 
 	_cleanup_old()
+	_maybe_open_relic_draft()
 
 	if player.global_position.y > 900.0:
 		_end_run_and_return_to_menu()
@@ -1715,8 +1725,7 @@ func _update_section_progression() -> void:
 		current_section += 1
 		_apply_biome_for_section(current_section)
 		_apply_section_theme(current_section)
-		if _grant_relic_for_section(current_section):
-			break
+		_grant_relic_for_section(current_section)
 		_increment_pace_level(1, "Sector shift")
 		_play_sfx_tone(640.0, 0.12, -9.0)
 
@@ -1770,13 +1779,14 @@ func _ensure_music_playing() -> void:
 		music_player.play()
 
 func _apply_section_theme(section_index: int) -> void:
-	if SECTION_COLORS.is_empty():
+	if BIOME_THEME_COLORS.is_empty():
 		return
-	var color_index: int = section_index % SECTION_COLORS.size()
-	world_background.color = SECTION_COLORS[color_index]
-	_tint_atmosphere_decor(SECTION_COLORS[color_index])
-	_tint_parallax_layers(SECTION_COLORS[color_index])
-	_tint_lane_guides(SECTION_COLORS[color_index])
+	var color_index: int = current_biome_index % BIOME_THEME_COLORS.size()
+	var theme_color: Color = BIOME_THEME_COLORS[color_index]
+	world_background.color = theme_color
+	_tint_atmosphere_decor(theme_color)
+	_tint_parallax_layers(theme_color)
+	_tint_lane_guides(theme_color)
 
 func _init_mission() -> void:
 	mission_completed = false
@@ -1879,6 +1889,7 @@ func _compute_health_spawn_chance() -> float:
 
 func _base_info_text() -> String:
 	var text: String = "Mode: %s | Biome: %s | Encounter: %s | Esc: pause/settings/rules | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge"), _encounter_name()]
+	text += " | Relics: %d" % run_relics.size()
 	if rift_active and rift_event_type != RiftEventType.NONE:
 		text += " | Event: %s %d/%d" % [rift_event_name, rift_event_progress, rift_event_target]
 	return text
@@ -1988,20 +1999,27 @@ func _load_progression_perks() -> void:
 
 func _init_run_relics() -> void:
 	run_relics.clear()
+	relic_draft_options.clear()
+	relic_draft_pending_options.clear()
+	relic_draft_active = false
 	run_coin_bonus_mult = 0.0
 	run_chrono_bonus_sec = 0.0
 	run_fireguard_bonus_sec = 0.0
 	run_magnet_bonus_radius = 0.0
+	relic_flash_until = 0.0
+	relic_flash.visible = false
 
-func _grant_relic_for_section(section_index: int) -> bool:
+func _grant_relic_for_section(section_index: int) -> void:
 	if section_index <= 0 or (section_index % RELIC_SECTION_INTERVAL) != 0:
-		return false
+		return
+	if not relic_draft_pending_options.is_empty() or relic_draft_active:
+		return
 	var available: Array[String] = []
 	for relic_id: String in STARTER_RELICS:
 		if not run_relics.has(relic_id):
 			available.append(relic_id)
 	if available.is_empty():
-		return false
+		return
 	var choices: Array[String] = []
 	var pool: Array[String] = []
 	for relic_id: String in available:
@@ -2011,8 +2029,8 @@ func _grant_relic_for_section(section_index: int) -> bool:
 		var idx: int = rng.randi_range(0, pool.size() - 1)
 		choices.append(pool[idx])
 		pool.remove_at(idx)
-	_start_relic_draft(choices)
-	return true
+	relic_draft_pending_options = choices
+	_set_info_notice("Relic signal detected: draft opens on next stable platform.", 2.2)
 
 func _start_relic_draft(choices: Array[String]) -> void:
 	relic_draft_options = choices
@@ -2036,6 +2054,21 @@ func _start_relic_draft(choices: Array[String]) -> void:
 		relic_choice_c_button.visible = true
 		relic_choice_c_button.text = _relic_choice_text(relic_draft_options[2])
 
+func _maybe_open_relic_draft() -> void:
+	if relic_draft_active:
+		return
+	if relic_draft_pending_options.is_empty():
+		return
+	if get_tree().paused:
+		return
+	if not player.is_on_floor():
+		return
+	if absf(player.velocity.y) > 6.0:
+		return
+	var queued_choices: Array[String] = relic_draft_pending_options
+	relic_draft_pending_options = []
+	_start_relic_draft(queued_choices)
+
 func _on_relic_choice_pressed(choice_index: int) -> void:
 	if choice_index < 0 or choice_index >= relic_draft_options.size():
 		return
@@ -2046,8 +2079,12 @@ func _on_relic_choice_pressed(choice_index: int) -> void:
 	relic_draft_active = false
 	relic_draft_overlay.visible = false
 	get_tree().paused = false
-	_set_info_notice("Relic acquired: %s" % _relic_display_name(picked), 2.4)
-	_play_sfx_tone(760.0, 0.12, -8.0)
+	relic_flash_until = run_seconds + 0.30
+	relic_flash.visible = true
+	relic_flash.color = Color(1.0, 0.82, 0.36, 0.34)
+	_set_info_notice("Relic acquired: %s | %s" % [_relic_display_name(picked), _relic_effect_text(picked)], 2.6)
+	_play_sfx_tone(760.0, 0.10, -8.0)
+	_play_sfx_tone(980.0, 0.07, -8.0)
 
 func _apply_relic_effect(relic_id: String) -> void:
 	match relic_id:
@@ -2106,6 +2143,17 @@ func _run_relics_text() -> String:
 	for relic_id: String in run_relics:
 		names.append(_relic_display_name(relic_id))
 	return ", ".join(names)
+
+func _update_relic_flash() -> void:
+	if not relic_flash.visible:
+		return
+	if run_seconds >= relic_flash_until:
+		relic_flash.visible = false
+		relic_flash.color.a = 0.0
+		return
+	var remaining: float = relic_flash_until - run_seconds
+	var t: float = clampf(remaining / 0.30, 0.0, 1.0)
+	relic_flash.color.a = 0.34 * t
 
 func _compute_credits_earned(run_score: int) -> int:
 	var score_component: int = int(floor(float(run_score) / 220.0))
