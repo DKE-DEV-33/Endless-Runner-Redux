@@ -70,15 +70,15 @@ func _refresh_score_labels() -> void:
 	var last_max_pace: int = int(get_tree().get_meta("last_max_pace", 0))
 	var last_tier: int = int(get_tree().get_meta("last_mission_tier", 0))
 	var last_coins: int = int(get_tree().get_meta("last_coins_collected", 0))
-	var is_new_best: bool = bool(get_tree().get_meta("is_new_best", false))
+	var is_new_best: bool = bool(get_tree().get_meta("is_new_best", false)) or bool(get_tree().get_meta("new_best", false))
 
 	if has_last:
 		var suffix: String = " NEW BEST!" if is_new_best else ""
-		last_score_label.text = "Last Run: %d%s\nD:%d  P:%d  R:%d" % [last_score, suffix, last_distance, last_pickup, last_risk]
-		summary_label.text = "Summary: Coins %d | Dodges %d | Max Pace %d | Directive Tier %d" % [last_coins, last_dodges, last_max_pace, last_tier]
+		last_score_label.text = "Last Run: %d%s\nDistance: %d   Pickups: %d   Risk: %d" % [last_score, suffix, last_distance, last_pickup, last_risk]
+		summary_label.text = "Coins: %d   Dodges: %d\nMax Pace: %d   Directive Tier: %d" % [last_coins, last_dodges, last_max_pace, last_tier]
 	else:
 		last_score_label.text = "Last Run: --"
-		summary_label.text = "Summary: --"
+		summary_label.text = "Run Summary: --"
 
 	best_score_label.text = "Best Run: %d" % best_score
 
