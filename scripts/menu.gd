@@ -1,7 +1,14 @@
 extends Control
 const INTRO_MUSIC_PATH: String = "res://assets/audio/intro_music.mp3"
 const SETTINGS_FILE: String = "user://settings.cfg"
+const RUN_STATS_FILE: String = "user://run_stats.cfg"
 const WINDOW_SIZES: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
+const PERK_MAX_LEVEL: int = 3
+const PERK_COSTS: Dictionary = {
+	"vitality": [120, 220, 360],
+	"coin_value": [140, 250, 390],
+	"fireguard": [130, 240, 380],
+}
 
 @onready var start_button: Button = $Card/Center/StartButton
 @onready var rules_button: Button = $Card/Center/RulesButton
@@ -12,12 +19,21 @@ const WINDOW_SIZES: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900),
 @onready var mode_button: Button = $Card/Center/ModeButton
 @onready var ui_scale_button: Button = $Card/Center/UiScaleButton
 @onready var daily_seed_label: Label = $Card/Center/DailySeedLabel
+@onready var credits_label: Label = $Card/Center/ArmoryCard/VBox/CreditsLabel
+@onready var vitality_button: Button = $Card/Center/ArmoryCard/VBox/VitalityButton
+@onready var coin_value_button: Button = $Card/Center/ArmoryCard/VBox/CoinValueButton
+@onready var fireguard_button: Button = $Card/Center/ArmoryCard/VBox/FireguardButton
+@onready var armory_hint_label: Label = $Card/Center/ArmoryCard/VBox/ArmoryHintLabel
 @onready var rules_overlay: ColorRect = $RulesOverlay
 @onready var close_rules_button: Button = $RulesOverlay/RulesPanel/VBox/CloseRulesButton
 
 var run_mode: String = "standard"
 var intro_player: AudioStreamPlayer = AudioStreamPlayer.new()
 var window_size_index: int = 1
+var credits: int = 0
+var perk_vitality_level: int = 0
+var perk_coin_value_level: int = 0
+var perk_fireguard_level: int = 0
 
 func _ready() -> void:
 	start_button.pressed.connect(_on_start_pressed)
@@ -26,12 +42,17 @@ func _ready() -> void:
 	close_rules_button.pressed.connect(_hide_rules_overlay)
 	mode_button.pressed.connect(_on_mode_pressed)
 	ui_scale_button.pressed.connect(_on_ui_scale_pressed)
+	vitality_button.pressed.connect(_on_vitality_pressed)
+	coin_value_button.pressed.connect(_on_coin_value_pressed)
+	fireguard_button.pressed.connect(_on_fireguard_pressed)
 	_setup_intro_music()
 	_load_display_settings()
 	run_mode = String(get_tree().get_meta("run_mode", "standard"))
 	_refresh_mode_ui()
 	_refresh_window_size_button()
 	_refresh_score_labels()
+	_load_progression()
+	_refresh_armory_ui()
 	rules_overlay.visible = false
 
 func _on_start_pressed() -> void:
@@ -59,6 +80,15 @@ func _on_ui_scale_pressed() -> void:
 	_refresh_window_size_button()
 	_save_display_settings()
 
+func _on_vitality_pressed() -> void:
+	_try_purchase_perk("vitality")
+
+func _on_coin_value_pressed() -> void:
+	_try_purchase_perk("coin_value")
+
+func _on_fireguard_pressed() -> void:
+	_try_purchase_perk("fireguard")
+
 func _refresh_score_labels() -> void:
 	var best_score: int = _load_best_score()
 	var has_last: bool = get_tree().has_meta("last_score")
@@ -70,12 +100,13 @@ func _refresh_score_labels() -> void:
 	var last_max_pace: int = int(get_tree().get_meta("last_max_pace", 0))
 	var last_tier: int = int(get_tree().get_meta("last_mission_tier", 0))
 	var last_coins: int = int(get_tree().get_meta("last_coins_collected", 0))
+	var last_credits_earned: int = int(get_tree().get_meta("last_credits_earned", 0))
 	var is_new_best: bool = bool(get_tree().get_meta("is_new_best", false)) or bool(get_tree().get_meta("new_best", false))
 
 	if has_last:
 		var suffix: String = " NEW BEST!" if is_new_best else ""
 		last_score_label.text = "Last Run: %d%s\nDistance: %d   Pickups: %d   Risk: %d" % [last_score, suffix, last_distance, last_pickup, last_risk]
-		summary_label.text = "Coins: %d   Dodges: %d\nMax Pace: %d   Directive Tier: %d" % [last_coins, last_dodges, last_max_pace, last_tier]
+		summary_label.text = "Coins: %d   Dodges: %d\nMax Pace: %d   Directive Tier: %d\nCredits Earned: %d" % [last_coins, last_dodges, last_max_pace, last_tier, last_credits_earned]
 	else:
 		last_score_label.text = "Last Run: --"
 		summary_label.text = "Run Summary: --"
@@ -91,11 +122,104 @@ func _refresh_mode_ui() -> void:
 		daily_seed_label.visible = false
 
 func _load_best_score() -> int:
-	var config: ConfigFile = ConfigFile.new()
-	var err: int = config.load("user://run_stats.cfg")
-	if err != OK:
-		return 0
+	var config: ConfigFile = _load_stats_config()
 	return int(config.get_value("scores", "best_score", 0))
+
+func _load_progression() -> void:
+	var config: ConfigFile = _load_stats_config()
+	credits = maxi(0, int(config.get_value("progression", "credits", 0)))
+	perk_vitality_level = clampi(int(config.get_value("progression", "perk_vitality", 0)), 0, PERK_MAX_LEVEL)
+	perk_coin_value_level = clampi(int(config.get_value("progression", "perk_coin_value", 0)), 0, PERK_MAX_LEVEL)
+	perk_fireguard_level = clampi(int(config.get_value("progression", "perk_fireguard", 0)), 0, PERK_MAX_LEVEL)
+
+func _save_progression() -> void:
+	var config: ConfigFile = _load_stats_config()
+	config.set_value("progression", "credits", credits)
+	config.set_value("progression", "perk_vitality", perk_vitality_level)
+	config.set_value("progression", "perk_coin_value", perk_coin_value_level)
+	config.set_value("progression", "perk_fireguard", perk_fireguard_level)
+	config.save(RUN_STATS_FILE)
+
+func _load_stats_config() -> ConfigFile:
+	var config: ConfigFile = ConfigFile.new()
+	config.load(RUN_STATS_FILE)
+	return config
+
+func _perk_level(key: String) -> int:
+	match key:
+		"vitality":
+			return perk_vitality_level
+		"coin_value":
+			return perk_coin_value_level
+		"fireguard":
+			return perk_fireguard_level
+	return 0
+
+func _perk_cost(key: String, level: int) -> int:
+	var costs: Array = PERK_COSTS.get(key, [])
+	if level < 0 or level >= costs.size():
+		return -1
+	return int(costs[level])
+
+func _set_perk_level(key: String, level: int) -> void:
+	match key:
+		"vitality":
+			perk_vitality_level = level
+		"coin_value":
+			perk_coin_value_level = level
+		"fireguard":
+			perk_fireguard_level = level
+
+func _perk_display_name(key: String) -> String:
+	match key:
+		"vitality":
+			return "Vitality (+1 max/start HP)"
+		"coin_value":
+			return "Coin Value (+5% score)"
+		"fireguard":
+			return "Fireguard (+1s duration)"
+	return key
+
+func _button_text_for_perk(key: String) -> String:
+	var level: int = _perk_level(key)
+	if level >= PERK_MAX_LEVEL:
+		return "%s Lv %d/%d (MAX)" % [_perk_display_name(key), level, PERK_MAX_LEVEL]
+	var cost: int = _perk_cost(key, level)
+	return "%s Lv %d/%d (Cost: %d)" % [_perk_display_name(key), level, PERK_MAX_LEVEL, cost]
+
+func _refresh_armory_ui() -> void:
+	credits_label.text = "Credits: %d" % credits
+	vitality_button.text = _button_text_for_perk("vitality")
+	coin_value_button.text = _button_text_for_perk("coin_value")
+	fireguard_button.text = _button_text_for_perk("fireguard")
+
+	var vitality_level: int = _perk_level("vitality")
+	var coin_level: int = _perk_level("coin_value")
+	var fireguard_level: int = _perk_level("fireguard")
+	var vitality_cost: int = _perk_cost("vitality", vitality_level)
+	var coin_cost: int = _perk_cost("coin_value", coin_level)
+	var fireguard_cost: int = _perk_cost("fireguard", fireguard_level)
+
+	vitality_button.disabled = vitality_level >= PERK_MAX_LEVEL or (vitality_cost > 0 and credits < vitality_cost)
+	coin_value_button.disabled = coin_level >= PERK_MAX_LEVEL or (coin_cost > 0 and credits < coin_cost)
+	fireguard_button.disabled = fireguard_level >= PERK_MAX_LEVEL or (fireguard_cost > 0 and credits < fireguard_cost)
+
+func _try_purchase_perk(key: String) -> void:
+	var level: int = _perk_level(key)
+	if level >= PERK_MAX_LEVEL:
+		armory_hint_label.text = "%s already maxed." % _perk_display_name(key)
+		return
+	var cost: int = _perk_cost(key, level)
+	if cost < 0:
+		return
+	if credits < cost:
+		armory_hint_label.text = "Need %d more credits for %s." % [cost - credits, _perk_display_name(key)]
+		return
+	credits -= cost
+	_set_perk_level(key, level + 1)
+	_save_progression()
+	_refresh_armory_ui()
+	armory_hint_label.text = "%s upgraded to Lv %d." % [_perk_display_name(key), _perk_level(key)]
 
 func _process(_delta: float) -> void:
 	if intro_player.stream != null and not intro_player.playing:

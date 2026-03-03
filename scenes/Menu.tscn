@@ -55,6 +55,18 @@ corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 
+[sub_resource type="StyleBoxFlat" id="7"]
+bg_color = Color(0.07, 0.13, 0.22, 0.92)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.27, 0.64, 0.94, 0.42)
+
 [node name="Menu" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -81,9 +93,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -240.0
-offset_top = -222.0
+offset_top = -288.0
 offset_right = 240.0
-offset_bottom = 222.0
+offset_bottom = 288.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("3")
@@ -126,6 +138,63 @@ layout_mode = 2
 text = "Run Summary: --"
 size_flags_horizontal = 3
 horizontal_alignment = 0
+label_settings = SubResource("2")
+
+[node name="ArmoryCard" type="Panel" parent="Card/Center"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("7")
+
+[node name="VBox" type="VBoxContainer" parent="Card/Center/ArmoryCard"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="ArmoryTitleLabel" type="Label" parent="Card/Center/ArmoryCard/VBox"]
+layout_mode = 2
+text = "Armory Upgrades"
+horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="CreditsLabel" type="Label" parent="Card/Center/ArmoryCard/VBox"]
+layout_mode = 2
+text = "Credits: 0"
+horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="VitalityButton" type="Button" parent="Card/Center/ArmoryCard/VBox"]
+layout_mode = 2
+text = "Vitality"
+theme_override_styles/normal = SubResource("4")
+theme_override_styles/hover = SubResource("5")
+theme_override_styles/pressed = SubResource("6")
+
+[node name="CoinValueButton" type="Button" parent="Card/Center/ArmoryCard/VBox"]
+layout_mode = 2
+text = "Coin Value"
+theme_override_styles/normal = SubResource("4")
+theme_override_styles/hover = SubResource("5")
+theme_override_styles/pressed = SubResource("6")
+
+[node name="FireguardButton" type="Button" parent="Card/Center/ArmoryCard/VBox"]
+layout_mode = 2
+text = "Fireguard"
+theme_override_styles/normal = SubResource("4")
+theme_override_styles/hover = SubResource("5")
+theme_override_styles/pressed = SubResource("6")
+
+[node name="ArmoryHintLabel" type="Label" parent="Card/Center/ArmoryCard/VBox"]
+layout_mode = 2
+text = "Upgrade perks with run credits."
+horizontal_alignment = 1
+autowrap_mode = 2
 label_settings = SubResource("2")
 
 [node name="ModeButton" type="Button" parent="Card/Center"]

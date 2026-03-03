@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.42"
+const BUILD_VERSION: String = "build-1.2.43"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -17,6 +17,11 @@ const RIFT_MAX_SECONDS: float = 28.0
 const RIFT_DURATION: float = 6.0
 const MISSION_BONUS_BASE: int = 500
 const MAX_HEALTH: int = 5
+const RUN_STATS_FILE: String = "user://run_stats.cfg"
+const PERK_MAX_LEVEL: int = 3
+const VITALITY_HEALTH_PER_LEVEL: int = 1
+const COIN_VALUE_BONUS_PER_LEVEL: float = 0.05
+const FIREGUARD_BONUS_SECONDS_PER_LEVEL: float = 1.0
 const COINS_PER_BONUS_HEART: int = 100
 const SECTION_LENGTH: float = 2300.0
 const ALT_ROUTE_VERTICAL_GAP_MIN: float = 104.0
@@ -139,6 +144,7 @@ var distance_score: int = 0
 var pickup_score: int = 0
 var risk_score: int = 0
 var health: int = 3
+var max_health_cap: int = MAX_HEALTH
 var total_coins_collected: int = 0
 var next_bonus_heart_at: int = COINS_PER_BONUS_HEART
 var mission_target: int = 40
@@ -169,6 +175,9 @@ var chrono_until: float = 0.0
 var magnet_until: float = 0.0
 var fireguard_until: float = 0.0
 var ability_cooldown_until: float = 0.0
+var perk_vitality_level: int = 0
+var perk_coin_value_level: int = 0
+var perk_fireguard_level: int = 0
 var rift_event_type: int = 0
 var rift_event_name: String = ""
 var rift_event_target: int = 0
@@ -214,6 +223,8 @@ func _ready() -> void:
 	_setup_run_mode_and_seed()
 	_load_audio_settings()
 	_load_display_settings()
+	_load_progression_perks()
+	health = mini(max_health_cap, 3 + perk_vitality_level)
 	player.global_position = Vector2(120.0, 408.0)
 	player.velocity = Vector2.ZERO
 	player.jump_triggered.connect(_on_player_jump_triggered)
@@ -1304,7 +1315,7 @@ func _on_coin_body_entered(body: Node, coin: Area2D) -> void:
 	if body != player:
 		return
 	_play_sfx_tone(980.0, 0.045, -14.0)
-	pickup_score += 25
+	pickup_score += _coin_points()
 	_register_combo(1, "", false)
 	total_coins_collected += 1
 	while total_coins_collected >= next_bonus_heart_at:
@@ -1322,7 +1333,7 @@ func _on_big_coin_body_entered(body: Node, big_coin: Area2D) -> void:
 	if body != player:
 		return
 	_play_sfx_tone(1120.0, 0.08, -11.0)
-	pickup_score += 25 * BIG_COIN_VALUE
+	pickup_score += _coin_points(BIG_COIN_VALUE)
 	_register_combo(2, "Big relic x10", false)
 	total_coins_collected += BIG_COIN_VALUE
 	while total_coins_collected >= next_bonus_heart_at:
@@ -1397,7 +1408,7 @@ func _on_ability_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 		_set_info_notice("Chrono surge: time dilated", 2.8)
 		_play_sfx_tone(300.0, 0.18, -8.0)
 	elif kind == AbilityType.FIREGUARD:
-		fireguard_until = run_seconds + FIREGUARD_DURATION
+		fireguard_until = run_seconds + FIREGUARD_DURATION + (float(perk_fireguard_level) * FIREGUARD_BONUS_SECONDS_PER_LEVEL)
 		_set_info_notice("Fireguard online: chasers pass through harmlessly", 2.8)
 		_play_sfx_tone(640.0, 0.14, -8.0)
 	else:
@@ -1797,8 +1808,13 @@ func _mission_text() -> String:
 	return "Directive: --"
 
 func _apply_health_delta(delta: int) -> void:
-	health = clampi(health + delta, 0, MAX_HEALTH)
+	health = clampi(health + delta, 0, max_health_cap)
 	_refresh_health_label()
+
+func _coin_points(multiplier: int = 1) -> int:
+	var bonus_mult: float = 1.0 + (float(perk_coin_value_level) * COIN_VALUE_BONUS_PER_LEVEL)
+	var points: float = float(25 * multiplier) * bonus_mult
+	return maxi(1, int(round(points)))
 
 func _refresh_health_label() -> void:
 	health_label.text = "Health: %d" % health
@@ -1814,7 +1830,7 @@ func _increment_pace_level(amount: int, reason: String) -> void:
 	_set_info_notice("%s | Pace level: %d" % [reason, pace_level], 2.1)
 
 func _compute_health_spawn_chance() -> float:
-	var health_missing: int = MAX_HEALTH - health
+	var health_missing: int = max_health_cap - health
 	var pace_level: int = player.get_pace_level()
 	var difficulty_penalty: float = minf(0.36, float(mission_tier - 1) * 0.020 + float(current_section) * 0.014)
 	var pressure_bonus: float = float(health_missing) * 0.135
@@ -1895,6 +1911,8 @@ func _finish_end_run() -> void:
 	if is_new_best:
 		best_score = run_score
 		_save_best_score(best_score)
+	var credits_earned: int = _compute_credits_earned(run_score)
+	var total_credits: int = _add_credits_and_persist(credits_earned)
 
 	get_tree().set_meta("last_score", run_score)
 	get_tree().set_meta("last_distance_points", _distance_points())
@@ -1905,21 +1923,54 @@ func _finish_end_run() -> void:
 	get_tree().set_meta("last_mission_tier", mission_tier)
 	get_tree().set_meta("last_coins_collected", total_coins_collected)
 	get_tree().set_meta("best_score", best_score)
+	get_tree().set_meta("last_best_score", best_score)
 	get_tree().set_meta("is_new_best", is_new_best)
+	get_tree().set_meta("new_best", is_new_best)
+	get_tree().set_meta("last_credits_earned", credits_earned)
+	get_tree().set_meta("total_credits", total_credits)
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/RunSummary.tscn")
 
 func _load_best_score() -> int:
 	var config: ConfigFile = ConfigFile.new()
-	var err: int = config.load("user://run_stats.cfg")
+	var err: int = config.load(RUN_STATS_FILE)
 	if err != OK:
 		return 0
 	return int(config.get_value("scores", "best_score", 0))
 
 func _save_best_score(score: int) -> void:
 	var config: ConfigFile = ConfigFile.new()
+	config.load(RUN_STATS_FILE)
 	config.set_value("scores", "best_score", score)
-	config.save("user://run_stats.cfg")
+	config.save(RUN_STATS_FILE)
+
+func _load_progression_perks() -> void:
+	var config: ConfigFile = ConfigFile.new()
+	var err: int = config.load(RUN_STATS_FILE)
+	if err != OK:
+		perk_vitality_level = 0
+		perk_coin_value_level = 0
+		perk_fireguard_level = 0
+	else:
+		perk_vitality_level = clampi(int(config.get_value("progression", "perk_vitality", 0)), 0, PERK_MAX_LEVEL)
+		perk_coin_value_level = clampi(int(config.get_value("progression", "perk_coin_value", 0)), 0, PERK_MAX_LEVEL)
+		perk_fireguard_level = clampi(int(config.get_value("progression", "perk_fireguard", 0)), 0, PERK_MAX_LEVEL)
+	max_health_cap = MAX_HEALTH + (perk_vitality_level * VITALITY_HEALTH_PER_LEVEL)
+
+func _compute_credits_earned(run_score: int) -> int:
+	var score_component: int = int(floor(float(run_score) / 220.0))
+	var tier_component: int = maxi(0, mission_tier - 1) * 2
+	var coin_component: int = int(floor(float(total_coins_collected) / 18.0))
+	return maxi(8, score_component + tier_component + coin_component)
+
+func _add_credits_and_persist(credits_earned: int) -> int:
+	var config: ConfigFile = ConfigFile.new()
+	config.load(RUN_STATS_FILE)
+	var current_credits: int = int(config.get_value("progression", "credits", 0))
+	var next_credits: int = maxi(0, current_credits + credits_earned)
+	config.set_value("progression", "credits", next_credits)
+	config.save(RUN_STATS_FILE)
+	return next_credits
 
 func _setup_run_mode_and_seed() -> void:
 	run_mode = String(get_tree().get_meta("run_mode", "standard"))

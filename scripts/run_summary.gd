@@ -29,6 +29,8 @@ func _refresh_summary() -> void:
 	var hazards_dodged: int = int(get_tree().get_meta("last_hazards_dodged", 0))
 	var max_pace: int = int(get_tree().get_meta("last_max_pace", 0))
 	var mission_tier: int = int(get_tree().get_meta("last_mission_tier", 1))
+	var credits_earned: int = int(get_tree().get_meta("last_credits_earned", 0))
+	var total_credits: int = int(get_tree().get_meta("total_credits", 0))
 
 	score_label.text = "Run Score: %d" % last_score
 	distance_value_label.text = str(distance_points)
@@ -38,7 +40,7 @@ func _refresh_summary() -> void:
 	dodges_value_label.text = str(hazards_dodged)
 	pace_value_label.text = str(max_pace)
 	tier_value_label.text = str(mission_tier)
-	best_label.text = "Best Run: %d" % best_score
+	best_label.text = "Best Run: %d\nCredits: +%d (Total %d)" % [best_score, credits_earned, total_credits]
 	if is_new_best:
 		best_label.text += " | New personal best"
 
