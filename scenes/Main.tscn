@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/player.gd" id="2"]
@@ -9,6 +9,7 @@
 [ext_resource type="Texture2D" path="res://assets/ui_icons/shield.svg" id="7"]
 [ext_resource type="Texture2D" path="res://assets/ui_icons/chrono_hourglass.svg" id="8"]
 [ext_resource type="Texture2D" path="res://assets/ui_icons/magnet_core.svg" id="9"]
+[ext_resource type="Texture2D" path="res://assets/ui_icons/fireguard.svg" id="10"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(36, 52)
@@ -439,6 +440,24 @@ layout_mode = 2
 size_flags_horizontal = 3
 autowrap_mode = 2
 text = "Violet sigil: temporary coin magnet"
+label_settings = SubResource("3")
+
+[node name="FireguardRow" type="HBoxContainer" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="FireguardIcon" type="TextureRect" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/FireguardRow"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("10")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="FireguardText" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody/ItemRows/FireguardRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 2
+text = "Orange sigil: chaser collisions ignored for 6s"
 label_settings = SubResource("3")
 
 [node name="Hazards" type="Label" parent="PauseLayer/PauseRulesOverlay/RulesPanel/VBox/Scroll/RulesBody"]

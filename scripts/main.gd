@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.40"
+const BUILD_VERSION: String = "build-1.2.42"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -70,6 +70,7 @@ const CHRONO_DURATION: float = 5.5
 const MAGNET_DURATION: float = 7.0
 const MAGNET_RADIUS: float = 220.0
 const MAGNET_PULL_SPEED: float = 560.0
+const FIREGUARD_DURATION: float = 6.0
 const HEALTH_COLOR_SAFE: Color = Color(0.88, 1.0, 0.88)
 const HEALTH_COLOR_WARN: Color = Color(1.0, 0.92, 0.52)
 const HEALTH_COLOR_CRIT: Color = Color(1.0, 0.52, 0.52)
@@ -166,6 +167,7 @@ var music_player: AudioStreamPlayer = AudioStreamPlayer.new()
 var shield_hits: int = 0
 var chrono_until: float = 0.0
 var magnet_until: float = 0.0
+var fireguard_until: float = 0.0
 var ability_cooldown_until: float = 0.0
 var rift_event_type: int = 0
 var rift_event_name: String = ""
@@ -180,7 +182,7 @@ var next_rift_at: float = 0.0
 
 enum MissionType { COINS, SURVIVE_TIME, NO_HIT_DISTANCE }
 enum PlatformType { SOLID, ONE_WAY_UP, DROP_THROUGH, GHOST }
-enum AbilityType { SHIELD, CHRONO, MAGNET }
+enum AbilityType { SHIELD, CHRONO, MAGNET, FIREGUARD }
 enum RiftEventType { NONE, COIN_SURGE, PHASE_LINE, EMBER_BREAKER }
 enum EncounterPhase { PLATFORM_CHALLENGE, HAZARD_PRESSURE, RECOVERY_WINDOW, REWARD_BURST }
 var mission_type: int = MissionType.COINS
@@ -993,7 +995,7 @@ func _maybe_place_ability_pickup(x: float, y: float, width: float, lane: int) ->
 	if run_seconds < ability_cooldown_until:
 		return false
 	var chance: float = ABILITY_PICKUP_BASE_CHANCE
-	if shield_hits > 0 or chrono_until > run_seconds or magnet_until > run_seconds:
+	if shield_hits > 0 or chrono_until > run_seconds or magnet_until > run_seconds or fireguard_until > run_seconds:
 		chance *= 0.35
 	if rng.randf() > chance:
 		return false
@@ -1007,11 +1009,13 @@ func _maybe_place_ability_pickup(x: float, y: float, width: float, lane: int) ->
 
 func _roll_ability_kind() -> int:
 	var roll: float = rng.randf()
-	if roll < 0.45:
+	if roll < 0.40:
 		return AbilityType.SHIELD
-	if roll < 0.75:
+	if roll < 0.68:
 		return AbilityType.CHRONO
-	return AbilityType.MAGNET
+	if roll < 0.88:
+		return AbilityType.MAGNET
+	return AbilityType.FIREGUARD
 
 func _create_coin(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
@@ -1093,6 +1097,7 @@ func _create_big_coin(pos: Vector2) -> Area2D:
 func _create_hazard(pos: Vector2) -> Area2D:
 	var area: Area2D = Area2D.new()
 	area.position = pos
+	area.set_meta("hazard_kind", "pillar")
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var circle: CircleShape2D = CircleShape2D.new()
@@ -1130,7 +1135,7 @@ func _create_hazard(pos: Vector2) -> Area2D:
 	flame_inner.set_meta("is_flame_inner", true)
 	area.add_child(flame_inner)
 
-	area.body_entered.connect(_on_hazard_body_entered)
+	area.body_entered.connect(_on_hazard_body_entered.bind(area))
 	return area
 
 func _create_hazard_chaser(pos: Vector2, speed: float) -> Area2D:
@@ -1171,7 +1176,7 @@ func _create_hazard_chaser(pos: Vector2, speed: float) -> Area2D:
 	trail.set_meta("is_chaser_trail", true)
 	area.add_child(trail)
 
-	area.body_entered.connect(_on_hazard_body_entered)
+	area.body_entered.connect(_on_hazard_body_entered.bind(area))
 	return area
 
 func _create_speed_pickup(pos: Vector2) -> Area2D:
@@ -1229,8 +1234,10 @@ func _create_ability_pickup(pos: Vector2, ability_kind: int) -> Area2D:
 		ring.color = Color(0.54, 0.93, 1.0, 0.82)
 	elif ability_kind == AbilityType.CHRONO:
 		ring.color = Color(1.0, 0.86, 0.42, 0.84)
-	else:
+	elif ability_kind == AbilityType.MAGNET:
 		ring.color = Color(0.86, 0.62, 1.0, 0.86)
+	else:
+		ring.color = Color(1.0, 0.58, 0.20, 0.88)
 	area.add_child(ring)
 
 	var core: Polygon2D = Polygon2D.new()
@@ -1246,12 +1253,19 @@ func _create_ability_pickup(pos: Vector2, ability_kind: int) -> Area2D:
 			Vector2(-2, 3), Vector2(2, 3), Vector2(6, 9), Vector2(-6, 9)
 		])
 		core.color = Color(1.0, 0.95, 0.74)
-	else:
+	elif ability_kind == AbilityType.MAGNET:
 		core.polygon = PackedVector2Array([
 			Vector2(-7, -8), Vector2(-2, -8), Vector2(-2, 4), Vector2(2, 4), Vector2(2, -8), Vector2(7, -8),
 			Vector2(7, 8), Vector2(-7, 8)
 		])
 		core.color = Color(0.95, 0.88, 1.0)
+	else:
+		# Flame crest icon for "fireguard" (chaser immunity).
+		core.polygon = PackedVector2Array([
+			Vector2(-4, 8), Vector2(-8, 2), Vector2(-4, -5), Vector2(0, -12),
+			Vector2(5, -3), Vector2(8, 3), Vector2(4, 8), Vector2(0, 4)
+		])
+		core.color = Color(1.0, 0.92, 0.78)
 	area.add_child(core)
 
 	area.body_entered.connect(_on_ability_pickup_body_entered.bind(area))
@@ -1322,8 +1336,15 @@ func _on_big_coin_body_entered(body: Node, big_coin: Area2D) -> void:
 	big_coins.erase(big_coin)
 	big_coin.queue_free()
 
-func _on_hazard_body_entered(body: Node) -> void:
+func _on_hazard_body_entered(body: Node, hazard: Area2D) -> void:
 	if body != player:
+		return
+	var hazard_kind: String = String(hazard.get_meta("hazard_kind", "pillar"))
+	if hazard_kind == "chaser" and fireguard_until > run_seconds:
+		_play_sfx_tone(590.0, 0.10, -7.0)
+		_set_info_notice("Fireguard burned through a chaser", 1.6)
+		hazards.erase(hazard)
+		hazard.call_deferred("queue_free")
 		return
 	if hazard_hit_cooldown > 0.0:
 		return
@@ -1375,6 +1396,10 @@ func _on_ability_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 		Engine.time_scale = 0.84
 		_set_info_notice("Chrono surge: time dilated", 2.8)
 		_play_sfx_tone(300.0, 0.18, -8.0)
+	elif kind == AbilityType.FIREGUARD:
+		fireguard_until = run_seconds + FIREGUARD_DURATION
+		_set_info_notice("Fireguard online: chasers pass through harmlessly", 2.8)
+		_play_sfx_tone(640.0, 0.14, -8.0)
 	else:
 		magnet_until = run_seconds + MAGNET_DURATION
 		_set_info_notice("Magnet core online: relics draw inward", 2.8)
@@ -1533,6 +1558,8 @@ func _update_active_abilities() -> void:
 
 	if shield_hits > 0:
 		player.modulate = Color(0.76, 0.96, 1.0, 1.0)
+	elif fireguard_until > run_seconds:
+		player.modulate = Color(1.0, 0.82, 0.58, 1.0)
 	elif chrono_until > run_seconds:
 		player.modulate = Color(1.0, 0.92, 0.70, 1.0)
 	elif magnet_until > run_seconds:
@@ -1832,6 +1859,7 @@ func _refresh_legend_text() -> void:
 		"Blue sigil: shield next hit.",
 		"Gold sigil: chrono slow-time.",
 		"Violet sigil: temporary coin magnet.",
+		"Orange flame sigil: nullify chaser collisions for 6s.",
 	]
 	var legend_text: String = "\n".join(lines)
 	legend_label.text = legend_text
