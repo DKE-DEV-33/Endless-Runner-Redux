@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.45"
+const BUILD_VERSION: String = "build-1.2.46"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -24,6 +24,10 @@ const COIN_VALUE_BONUS_PER_LEVEL: float = 0.05
 const FIREGUARD_BONUS_SECONDS_PER_LEVEL: float = 1.0
 const RELIC_SECTION_INTERVAL: int = 3
 const RELIC_DRAFT_CHOICES: int = 3
+const RELIC_DRAFT_SAFE_AHEAD: float = 420.0
+const RELIC_DRAFT_SAFE_BEHIND: float = 180.0
+const RELIC_DRAFT_SAFE_Y_DELTA: float = 170.0
+const RELIC_DRAFT_STABLE_SECONDS: float = 0.28
 const BIOME_THEME_COLORS: Array[Color] = [
 	Color(0.04, 0.07, 0.12), # Foundry Rim (cool steel blue)
 	Color(0.05, 0.16, 0.20), # Rift Span (teal-cyan)
@@ -203,6 +207,7 @@ var run_relics: Array[String] = []
 var relic_draft_options: Array[String] = []
 var relic_draft_pending_options: Array[String] = []
 var relic_draft_active: bool = false
+var relic_draft_safe_timer: float = 0.0
 var relic_flash_until: float = 0.0
 var run_coin_bonus_mult: float = 0.0
 var run_chrono_bonus_sec: float = 0.0
@@ -338,7 +343,7 @@ func _process(delta: float) -> void:
 	mission_label.text = _mission_text()
 
 	_cleanup_old()
-	_maybe_open_relic_draft()
+	_maybe_open_relic_draft(delta)
 
 	if player.global_position.y > 900.0:
 		_end_run_and_return_to_menu()
@@ -2002,6 +2007,7 @@ func _init_run_relics() -> void:
 	relic_draft_options.clear()
 	relic_draft_pending_options.clear()
 	relic_draft_active = false
+	relic_draft_safe_timer = 0.0
 	run_coin_bonus_mult = 0.0
 	run_chrono_bonus_sec = 0.0
 	run_fireguard_bonus_sec = 0.0
@@ -2054,20 +2060,47 @@ func _start_relic_draft(choices: Array[String]) -> void:
 		relic_choice_c_button.visible = true
 		relic_choice_c_button.text = _relic_choice_text(relic_draft_options[2])
 
-func _maybe_open_relic_draft() -> void:
+func _maybe_open_relic_draft(delta: float) -> void:
 	if relic_draft_active:
+		relic_draft_safe_timer = 0.0
 		return
 	if relic_draft_pending_options.is_empty():
+		relic_draft_safe_timer = 0.0
 		return
 	if get_tree().paused:
+		relic_draft_safe_timer = 0.0
 		return
 	if not player.is_on_floor():
+		relic_draft_safe_timer = 0.0
 		return
 	if absf(player.velocity.y) > 6.0:
+		relic_draft_safe_timer = 0.0
+		return
+	if encounter_phase == EncounterPhase.HAZARD_PRESSURE:
+		relic_draft_safe_timer = 0.0
+		return
+	if _has_nearby_hazards_for_draft():
+		relic_draft_safe_timer = 0.0
+		return
+	relic_draft_safe_timer += delta
+	if relic_draft_safe_timer < RELIC_DRAFT_STABLE_SECONDS:
 		return
 	var queued_choices: Array[String] = relic_draft_pending_options
 	relic_draft_pending_options = []
+	relic_draft_safe_timer = 0.0
 	_start_relic_draft(queued_choices)
+
+func _has_nearby_hazards_for_draft() -> bool:
+	for hazard: Area2D in hazards:
+		if not is_instance_valid(hazard):
+			continue
+		var dx: float = hazard.global_position.x - player.global_position.x
+		if dx < -RELIC_DRAFT_SAFE_BEHIND or dx > RELIC_DRAFT_SAFE_AHEAD:
+			continue
+		if absf(hazard.global_position.y - player.global_position.y) > RELIC_DRAFT_SAFE_Y_DELTA:
+			continue
+		return true
+	return false
 
 func _on_relic_choice_pressed(choice_index: int) -> void:
 	if choice_index < 0 or choice_index >= relic_draft_options.size():
