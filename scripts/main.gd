@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.47"
+const BUILD_VERSION: String = "build-1.2.48"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -24,6 +24,7 @@ const COIN_VALUE_BONUS_PER_LEVEL: float = 0.05
 const FIREGUARD_BONUS_SECONDS_PER_LEVEL: float = 1.0
 const RELIC_SECTION_INTERVAL: int = 3
 const RELIC_DRAFT_CHOICES: int = 3
+const RELIC_RARE_PITY_DRAFTS: int = 3
 const RELIC_DRAFT_SAFE_AHEAD: float = 420.0
 const RELIC_DRAFT_SAFE_BEHIND: float = 180.0
 const RELIC_DRAFT_SAFE_Y_DELTA: float = 170.0
@@ -209,6 +210,7 @@ var relic_draft_options: Array[String] = []
 var relic_draft_pending_options: Array[String] = []
 var relic_draft_active: bool = false
 var relic_draft_safe_timer: float = 0.0
+var relic_drafts_without_rare: int = 0
 var relic_flash_until: float = 0.0
 var run_coin_bonus_mult: float = 0.0
 var run_chrono_bonus_sec: float = 0.0
@@ -2010,6 +2012,7 @@ func _init_run_relics() -> void:
 	relic_draft_pending_options.clear()
 	relic_draft_active = false
 	relic_draft_safe_timer = 0.0
+	relic_drafts_without_rare = 0
 	run_coin_bonus_mult = 0.0
 	run_chrono_bonus_sec = 0.0
 	run_fireguard_bonus_sec = 0.0
@@ -2033,14 +2036,32 @@ func _grant_relic_for_section(section_index: int) -> void:
 	for relic_id: String in available:
 		pool.append(relic_id)
 	var target_count: int = mini(RELIC_DRAFT_CHOICES, pool.size())
+	var pity_forced_rare: bool = false
+	if relic_drafts_without_rare >= RELIC_RARE_PITY_DRAFTS:
+		var rare_candidates: Array[String] = []
+		for relic_id: String in pool:
+			if _relic_rarity(relic_id) == "rare":
+				rare_candidates.append(relic_id)
+		if not rare_candidates.is_empty():
+			var rare_pick: String = rare_candidates[rng.randi_range(0, rare_candidates.size() - 1)]
+			choices.append(rare_pick)
+			pool.erase(rare_pick)
+			pity_forced_rare = true
 	while choices.size() < target_count:
 		var picked_id: String = _pick_weighted_relic(pool)
 		if picked_id == "":
 			break
 		choices.append(picked_id)
 		pool.erase(picked_id)
+	if _choices_have_rare(choices):
+		relic_drafts_without_rare = 0
+	else:
+		relic_drafts_without_rare += 1
 	relic_draft_pending_options = choices
-	_set_info_notice("Relic signal detected: draft opens on next stable platform.", 2.2)
+	if pity_forced_rare:
+		_set_info_notice("Relic signal detected: rare trace locked for next draft.", 2.2)
+	else:
+		_set_info_notice("Relic signal detected: draft opens on next stable platform.", 2.2)
 
 func _start_relic_draft(choices: Array[String]) -> void:
 	relic_draft_options = choices
@@ -2196,6 +2217,12 @@ func _apply_relic_choice_button_style(button: Button, relic_id: String) -> void:
 			button.add_theme_color_override("font_color", Color(0.90, 0.96, 1.0))
 			button.add_theme_color_override("font_focus_color", Color(0.94, 0.98, 1.0))
 			button.add_theme_color_override("font_hover_color", Color(0.98, 1.0, 1.0))
+
+func _choices_have_rare(choices: Array[String]) -> bool:
+	for relic_id: String in choices:
+		if _relic_rarity(relic_id) == "rare":
+			return true
+	return false
 
 func _run_relics_text() -> String:
 	if run_relics.is_empty():
