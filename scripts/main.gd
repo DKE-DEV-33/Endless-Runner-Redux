@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.46"
+const BUILD_VERSION: String = "build-1.2.47"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -33,14 +33,15 @@ const BIOME_THEME_COLORS: Array[Color] = [
 	Color(0.05, 0.16, 0.20), # Rift Span (teal-cyan)
 	Color(0.17, 0.07, 0.08), # Ember Vault (red-ember)
 ]
-const STARTER_RELICS: Array[String] = [
-	"aegis_shard",
-	"coin_lens",
-	"chrono_spool",
-	"firecore",
-	"magnet_array",
-	"vitality_cell",
-]
+const RELIC_LIBRARY: Dictionary = {
+	"aegis_shard": {"name": "Aegis Shard", "effect": "Gain a shield charge now.", "rarity": "common", "weight": 1.00},
+	"vitality_cell": {"name": "Vitality Cell", "effect": "Restore 1 health immediately.", "rarity": "common", "weight": 1.00},
+	"coin_lens": {"name": "Coin Lens", "effect": "+10% coin score value this run.", "rarity": "common", "weight": 0.95},
+	"magnet_array": {"name": "Magnet Array", "effect": "+50 magnet pickup radius this run.", "rarity": "uncommon", "weight": 0.62},
+	"chrono_spool": {"name": "Chrono Spool", "effect": "+1s chrono duration this run.", "rarity": "uncommon", "weight": 0.58},
+	"firecore": {"name": "Firecore Prism", "effect": "+1.5s fireguard duration this run.", "rarity": "rare", "weight": 0.30},
+}
+const RELIC_IDS: Array[String] = ["aegis_shard", "vitality_cell", "coin_lens", "magnet_array", "chrono_spool", "firecore"]
 const COINS_PER_BONUS_HEART: int = 100
 const SECTION_LENGTH: float = 2300.0
 const ALT_ROUTE_VERTICAL_GAP_MIN: float = 104.0
@@ -1973,6 +1974,7 @@ func _finish_end_run() -> void:
 	get_tree().set_meta("last_credits_earned", credits_earned)
 	get_tree().set_meta("total_credits", total_credits)
 	get_tree().set_meta("last_relics", _run_relics_text())
+	get_tree().set_meta("last_relic_rarity", _run_relic_rarity_text())
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/RunSummary.tscn")
 
@@ -2021,7 +2023,7 @@ func _grant_relic_for_section(section_index: int) -> void:
 	if not relic_draft_pending_options.is_empty() or relic_draft_active:
 		return
 	var available: Array[String] = []
-	for relic_id: String in STARTER_RELICS:
+	for relic_id: String in RELIC_IDS:
 		if not run_relics.has(relic_id):
 			available.append(relic_id)
 	if available.is_empty():
@@ -2032,9 +2034,11 @@ func _grant_relic_for_section(section_index: int) -> void:
 		pool.append(relic_id)
 	var target_count: int = mini(RELIC_DRAFT_CHOICES, pool.size())
 	while choices.size() < target_count:
-		var idx: int = rng.randi_range(0, pool.size() - 1)
-		choices.append(pool[idx])
-		pool.remove_at(idx)
+		var picked_id: String = _pick_weighted_relic(pool)
+		if picked_id == "":
+			break
+		choices.append(picked_id)
+		pool.erase(picked_id)
 	relic_draft_pending_options = choices
 	_set_info_notice("Relic signal detected: draft opens on next stable platform.", 2.2)
 
@@ -2053,12 +2057,15 @@ func _start_relic_draft(choices: Array[String]) -> void:
 	if relic_draft_options.size() > 0:
 		relic_choice_a_button.visible = true
 		relic_choice_a_button.text = _relic_choice_text(relic_draft_options[0])
+		_apply_relic_choice_button_style(relic_choice_a_button, relic_draft_options[0])
 	if relic_draft_options.size() > 1:
 		relic_choice_b_button.visible = true
 		relic_choice_b_button.text = _relic_choice_text(relic_draft_options[1])
+		_apply_relic_choice_button_style(relic_choice_b_button, relic_draft_options[1])
 	if relic_draft_options.size() > 2:
 		relic_choice_c_button.visible = true
 		relic_choice_c_button.text = _relic_choice_text(relic_draft_options[2])
+		_apply_relic_choice_button_style(relic_choice_c_button, relic_draft_options[2])
 
 func _maybe_open_relic_draft(delta: float) -> void:
 	if relic_draft_active:
@@ -2128,46 +2135,67 @@ func _apply_relic_effect(relic_id: String) -> void:
 		"chrono_spool":
 			run_chrono_bonus_sec += 1.0
 		"firecore":
-			run_fireguard_bonus_sec += 1.0
+			run_fireguard_bonus_sec += 1.5
+			risk_score += 120
 		"magnet_array":
 			run_magnet_bonus_radius += 50.0
 		"vitality_cell":
 			_apply_health_delta(1)
 
 func _relic_display_name(relic_id: String) -> String:
-	match relic_id:
-		"aegis_shard":
-			return "Aegis Shard"
-		"coin_lens":
-			return "Coin Lens"
-		"chrono_spool":
-			return "Chrono Spool"
-		"firecore":
-			return "Firecore Prism"
-		"magnet_array":
-			return "Magnet Array"
-		"vitality_cell":
-			return "Vitality Cell"
+	if RELIC_LIBRARY.has(relic_id):
+		return String(RELIC_LIBRARY[relic_id].get("name", relic_id))
 	return relic_id
 
 func _relic_effect_text(relic_id: String) -> String:
-	match relic_id:
-		"aegis_shard":
-			return "Gain a shield charge now."
-		"coin_lens":
-			return "+10% coin score value this run."
-		"chrono_spool":
-			return "+1s chrono duration this run."
-		"firecore":
-			return "+1s fireguard duration this run."
-		"magnet_array":
-			return "+50 magnet pickup radius this run."
-		"vitality_cell":
-			return "Restore 1 health immediately."
+	if RELIC_LIBRARY.has(relic_id):
+		return String(RELIC_LIBRARY[relic_id].get("effect", ""))
 	return ""
 
 func _relic_choice_text(relic_id: String) -> String:
-	return "%s | %s" % [_relic_display_name(relic_id), _relic_effect_text(relic_id)]
+	var rarity: String = _relic_rarity(relic_id).capitalize()
+	return "[%s] %s | %s" % [rarity, _relic_display_name(relic_id), _relic_effect_text(relic_id)]
+
+func _relic_rarity(relic_id: String) -> String:
+	if RELIC_LIBRARY.has(relic_id):
+		return String(RELIC_LIBRARY[relic_id].get("rarity", "common"))
+	return "common"
+
+func _relic_weight(relic_id: String) -> float:
+	if RELIC_LIBRARY.has(relic_id):
+		return float(RELIC_LIBRARY[relic_id].get("weight", 1.0))
+	return 1.0
+
+func _pick_weighted_relic(pool: Array[String]) -> String:
+	if pool.is_empty():
+		return ""
+	var total_weight: float = 0.0
+	for relic_id: String in pool:
+		total_weight += _relic_weight(relic_id)
+	if total_weight <= 0.0:
+		return pool[rng.randi_range(0, pool.size() - 1)]
+	var roll: float = rng.randf() * total_weight
+	var running: float = 0.0
+	for relic_id: String in pool:
+		running += _relic_weight(relic_id)
+		if roll <= running:
+			return relic_id
+	return pool[pool.size() - 1]
+
+func _apply_relic_choice_button_style(button: Button, relic_id: String) -> void:
+	match _relic_rarity(relic_id):
+		"rare":
+			button.add_theme_color_override("font_color", Color(1.0, 0.90, 0.58))
+			button.add_theme_color_override("font_focus_color", Color(1.0, 0.92, 0.68))
+			button.add_theme_color_override("font_hover_color", Color(1.0, 0.94, 0.75))
+		"uncommon":
+			button.add_theme_color_override("font_color", Color(0.76, 0.92, 1.0))
+			button.add_theme_color_override("font_focus_color", Color(0.84, 0.95, 1.0))
+			button.add_theme_color_override("font_hover_color", Color(0.88, 0.97, 1.0))
+		_:
+			button.add_theme_color_override("font_color", Color(0.90, 0.96, 1.0))
+			button.add_theme_color_override("font_focus_color", Color(0.94, 0.98, 1.0))
+			button.add_theme_color_override("font_hover_color", Color(0.98, 1.0, 1.0))
 
 func _run_relics_text() -> String:
 	if run_relics.is_empty():
@@ -2176,6 +2204,22 @@ func _run_relics_text() -> String:
 	for relic_id: String in run_relics:
 		names.append(_relic_display_name(relic_id))
 	return ", ".join(names)
+
+func _run_relic_rarity_text() -> String:
+	if run_relics.is_empty():
+		return "C:0 U:0 R:0"
+	var common_count: int = 0
+	var uncommon_count: int = 0
+	var rare_count: int = 0
+	for relic_id: String in run_relics:
+		match _relic_rarity(relic_id):
+			"rare":
+				rare_count += 1
+			"uncommon":
+				uncommon_count += 1
+			_:
+				common_count += 1
+	return "C:%d U:%d R:%d" % [common_count, uncommon_count, rare_count]
 
 func _update_relic_flash() -> void:
 	if not relic_flash.visible:
