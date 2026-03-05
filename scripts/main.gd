@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.48"
+const BUILD_VERSION: String = "build-1.2.49"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -208,6 +208,7 @@ var perk_fireguard_level: int = 0
 var run_relics: Array[String] = []
 var relic_draft_options: Array[String] = []
 var relic_draft_pending_options: Array[String] = []
+var relic_draft_pending_pity: bool = false
 var relic_draft_active: bool = false
 var relic_draft_safe_timer: float = 0.0
 var relic_drafts_without_rare: int = 0
@@ -2010,6 +2011,7 @@ func _init_run_relics() -> void:
 	run_relics.clear()
 	relic_draft_options.clear()
 	relic_draft_pending_options.clear()
+	relic_draft_pending_pity = false
 	relic_draft_active = false
 	relic_draft_safe_timer = 0.0
 	relic_drafts_without_rare = 0
@@ -2058,12 +2060,13 @@ func _grant_relic_for_section(section_index: int) -> void:
 	else:
 		relic_drafts_without_rare += 1
 	relic_draft_pending_options = choices
+	relic_draft_pending_pity = pity_forced_rare
 	if pity_forced_rare:
 		_set_info_notice("Relic signal detected: rare trace locked for next draft.", 2.2)
 	else:
 		_set_info_notice("Relic signal detected: draft opens on next stable platform.", 2.2)
 
-func _start_relic_draft(choices: Array[String]) -> void:
+func _start_relic_draft(choices: Array[String], pity_active: bool = false) -> void:
 	relic_draft_options = choices
 	relic_draft_active = true
 	relic_draft_overlay.visible = true
@@ -2071,7 +2074,10 @@ func _start_relic_draft(choices: Array[String]) -> void:
 	pause_panel.visible = false
 	pause_rules_overlay.visible = false
 	get_tree().paused = true
-	relic_draft_subtitle_label.text = "Choose one relic for this run."
+	if pity_active:
+		relic_draft_subtitle_label.text = "Choose one relic for this run. Pity Active: guaranteed rare option."
+	else:
+		relic_draft_subtitle_label.text = "Choose one relic for this run."
 	relic_choice_a_button.visible = false
 	relic_choice_b_button.visible = false
 	relic_choice_c_button.visible = false
@@ -2115,8 +2121,10 @@ func _maybe_open_relic_draft(delta: float) -> void:
 		return
 	var queued_choices: Array[String] = relic_draft_pending_options
 	relic_draft_pending_options = []
+	var pity_active: bool = relic_draft_pending_pity
+	relic_draft_pending_pity = false
 	relic_draft_safe_timer = 0.0
-	_start_relic_draft(queued_choices)
+	_start_relic_draft(queued_choices, pity_active)
 
 func _has_nearby_hazards_for_draft() -> bool:
 	for hazard: Area2D in hazards:
