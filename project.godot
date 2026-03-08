@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="Endless Runner Redux"
-run/main_scene="res://scenes/Main.tscn"
+run/main_scene="res://scenes/Splash.tscn"
 config/features=PackedStringArray("4.6")
 
 [display]
@@ -24,7 +24,6 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/size/window_width_override=1600
 window/size/window_height_override=900
-window/size/resizable=true
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
