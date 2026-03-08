@@ -140,20 +140,6 @@ size_flags_horizontal = 3
 horizontal_alignment = 0
 label_settings = SubResource("2")
 
-[node name="ProfileButton" type="Button" parent="Card/Center"]
-layout_mode = 2
-text = "Profile: Slot 1"
-theme_override_styles/normal = SubResource("4")
-theme_override_styles/hover = SubResource("5")
-theme_override_styles/pressed = SubResource("6")
-
-[node name="ResetProfileButton" type="Button" parent="Card/Center"]
-layout_mode = 2
-text = "Reset Current Profile"
-theme_override_styles/normal = SubResource("4")
-theme_override_styles/hover = SubResource("5")
-theme_override_styles/pressed = SubResource("6")
-
 [node name="ArmoryCard" type="Panel" parent="Card/Center"]
 layout_mode = 2
 size_flags_horizontal = 3
