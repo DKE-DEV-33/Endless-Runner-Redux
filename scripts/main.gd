@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.50"
+const BUILD_VERSION: String = "build-1.2.51"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -17,7 +17,7 @@ const RIFT_MAX_SECONDS: float = 28.0
 const RIFT_DURATION: float = 6.0
 const MISSION_BONUS_BASE: int = 500
 const MAX_HEALTH: int = 5
-const RUN_STATS_FILE: String = "user://run_stats.cfg"
+const RUN_STATS_FILE_TEMPLATE: String = "user://run_stats_%s.cfg"
 const PERK_MAX_LEVEL: int = 3
 const VITALITY_HEALTH_PER_LEVEL: int = 1
 const COIN_VALUE_BONUS_PER_LEVEL: float = 0.05
@@ -1996,20 +1996,20 @@ func _finish_end_run() -> void:
 
 func _load_best_score() -> int:
 	var config: ConfigFile = ConfigFile.new()
-	var err: int = config.load(RUN_STATS_FILE)
+	var err: int = config.load(_run_stats_file())
 	if err != OK:
 		return 0
 	return int(config.get_value("scores", "best_score", 0))
 
 func _save_best_score(score: int) -> void:
 	var config: ConfigFile = ConfigFile.new()
-	config.load(RUN_STATS_FILE)
+	config.load(_run_stats_file())
 	config.set_value("scores", "best_score", score)
-	config.save(RUN_STATS_FILE)
+	config.save(_run_stats_file())
 
 func _load_progression_perks() -> void:
 	var config: ConfigFile = ConfigFile.new()
-	var err: int = config.load(RUN_STATS_FILE)
+	var err: int = config.load(_run_stats_file())
 	if err != OK:
 		perk_vitality_level = 0
 		perk_coin_value_level = 0
@@ -2339,11 +2339,11 @@ func _compute_credits_earned(run_score: int) -> int:
 
 func _add_credits_and_persist(credits_earned: int) -> int:
 	var config: ConfigFile = ConfigFile.new()
-	config.load(RUN_STATS_FILE)
+	config.load(_run_stats_file())
 	var current_credits: int = int(config.get_value("progression", "credits", 0))
 	var next_credits: int = maxi(0, current_credits + credits_earned)
 	config.set_value("progression", "credits", next_credits)
-	config.save(RUN_STATS_FILE)
+	config.save(_run_stats_file())
 	return next_credits
 
 func _setup_run_mode_and_seed() -> void:
@@ -2355,6 +2355,10 @@ func _setup_run_mode_and_seed() -> void:
 	else:
 		rng.randomize()
 		run_seed = rng.randi()
+
+func _run_stats_file() -> String:
+	var profile_id: String = String(get_tree().get_meta("profile_id", "slot1"))
+	return RUN_STATS_FILE_TEMPLATE % profile_id
 
 func _setup_pause_ui() -> void:
 	pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS

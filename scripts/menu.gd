@@ -1,9 +1,10 @@
 extends Control
 const INTRO_MUSIC_PATH: String = "res://assets/audio/intro_music.mp3"
 const SETTINGS_FILE: String = "user://settings.cfg"
-const RUN_STATS_FILE: String = "user://run_stats.cfg"
+const RUN_STATS_FILE_TEMPLATE: String = "user://run_stats_%s.cfg"
 const WINDOW_SIZES: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
 const PERK_MAX_LEVEL: int = 3
+const PROFILE_IDS: Array[String] = ["slot1", "slot2", "slot3"]
 const PERK_COSTS: Dictionary = {
 	"vitality": [400, 820, 1450],
 	"coin_value": [460, 900, 1550],
@@ -16,6 +17,8 @@ const PERK_COSTS: Dictionary = {
 @onready var last_score_label: Label = $Card/Center/LastScoreLabel
 @onready var best_score_label: Label = $Card/Center/BestScoreLabel
 @onready var summary_label: Label = $Card/Center/SummaryLabel
+@onready var profile_button: Button = $Card/Center/ProfileButton
+@onready var reset_profile_button: Button = $Card/Center/ResetProfileButton
 @onready var mode_button: Button = $Card/Center/ModeButton
 @onready var ui_scale_button: Button = $Card/Center/UiScaleButton
 @onready var daily_seed_label: Label = $Card/Center/DailySeedLabel
@@ -34,12 +37,15 @@ var credits: int = 0
 var perk_vitality_level: int = 0
 var perk_coin_value_level: int = 0
 var perk_fireguard_level: int = 0
+var profile_index: int = 0
 
 func _ready() -> void:
 	start_button.pressed.connect(_on_start_pressed)
 	rules_button.pressed.connect(_on_rules_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
 	close_rules_button.pressed.connect(_hide_rules_overlay)
+	profile_button.pressed.connect(_on_profile_pressed)
+	reset_profile_button.pressed.connect(_on_reset_profile_pressed)
 	mode_button.pressed.connect(_on_mode_pressed)
 	ui_scale_button.pressed.connect(_on_ui_scale_pressed)
 	vitality_button.pressed.connect(_on_vitality_pressed)
@@ -47,8 +53,10 @@ func _ready() -> void:
 	fireguard_button.pressed.connect(_on_fireguard_pressed)
 	_setup_intro_music()
 	_load_display_settings()
+	_load_profile_selection()
 	run_mode = String(get_tree().get_meta("run_mode", "standard"))
 	_refresh_mode_ui()
+	_refresh_profile_ui()
 	_refresh_window_size_button()
 	_refresh_score_labels()
 	_load_progression()
@@ -59,6 +67,7 @@ func _on_start_pressed() -> void:
 	if intro_player.playing:
 		intro_player.stop()
 	get_tree().set_meta("run_mode", run_mode)
+	get_tree().set_meta("profile_id", _current_profile_id())
 	get_tree().change_scene_to_file("res://scenes/Main.tscn")
 
 func _on_quit_pressed() -> void:
@@ -79,6 +88,24 @@ func _on_ui_scale_pressed() -> void:
 	_apply_window_size(window_size_index)
 	_refresh_window_size_button()
 	_save_display_settings()
+
+func _on_profile_pressed() -> void:
+	profile_index = (profile_index + 1) % PROFILE_IDS.size()
+	get_tree().set_meta("profile_id", _current_profile_id())
+	_clear_last_run_meta()
+	_refresh_profile_ui()
+	_refresh_score_labels()
+	_load_progression()
+	_refresh_armory_ui()
+
+func _on_reset_profile_pressed() -> void:
+	var path: String = _run_stats_file()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	_clear_last_run_meta()
+	_refresh_score_labels()
+	_load_progression()
+	_refresh_armory_ui()
+	armory_hint_label.text = "Profile reset: %s" % _current_profile_id().capitalize()
 
 func _on_vitality_pressed() -> void:
 	_try_purchase_perk("vitality")
@@ -138,12 +165,50 @@ func _save_progression() -> void:
 	config.set_value("progression", "perk_vitality", perk_vitality_level)
 	config.set_value("progression", "perk_coin_value", perk_coin_value_level)
 	config.set_value("progression", "perk_fireguard", perk_fireguard_level)
-	config.save(RUN_STATS_FILE)
+	config.save(_run_stats_file())
 
 func _load_stats_config() -> ConfigFile:
 	var config: ConfigFile = ConfigFile.new()
-	config.load(RUN_STATS_FILE)
+	config.load(_run_stats_file())
 	return config
+
+func _run_stats_file() -> String:
+	return RUN_STATS_FILE_TEMPLATE % _current_profile_id()
+
+func _current_profile_id() -> String:
+	return PROFILE_IDS[profile_index]
+
+func _load_profile_selection() -> void:
+	var requested: String = String(get_tree().get_meta("profile_id", PROFILE_IDS[0]))
+	profile_index = 0
+	for i: int in range(PROFILE_IDS.size()):
+		if PROFILE_IDS[i] == requested:
+			profile_index = i
+			break
+
+func _refresh_profile_ui() -> void:
+	profile_button.text = "Profile: %s" % _current_profile_id().capitalize()
+
+func _clear_last_run_meta() -> void:
+	var keys: Array[String] = [
+		"last_score",
+		"last_distance_points",
+		"last_pickup_points",
+		"last_risk_points",
+		"last_hazards_dodged",
+		"last_max_pace",
+		"last_mission_tier",
+		"last_coins_collected",
+		"last_credits_earned",
+		"last_relics",
+		"last_relic_rarity",
+		"last_synergies",
+		"is_new_best",
+		"new_best",
+	]
+	for key: String in keys:
+		if get_tree().has_meta(key):
+			get_tree().remove_meta(key)
 
 func _perk_level(key: String) -> int:
 	match key:
