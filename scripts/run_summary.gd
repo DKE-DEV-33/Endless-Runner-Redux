@@ -41,6 +41,7 @@ func _refresh_summary() -> void:
 	var total_credits: int = int(get_tree().get_meta("total_credits", 0))
 	var relics_text: String = String(get_tree().get_meta("last_relics", "None"))
 	var rarity_text: String = String(get_tree().get_meta("last_relic_rarity", "C:0 U:0 R:0"))
+	var synergies_text: String = String(get_tree().get_meta("last_synergies", "None"))
 
 	score_label.text = "Run Score: %d" % last_score
 	distance_value_label.text = str(distance_points)
@@ -53,7 +54,7 @@ func _refresh_summary() -> void:
 	stats_summary_label.text = "Distance: %d   Pickups: %d   Risk: %d\nCoins: %d   Dodges: %d   Pace: %d   Directive: %d" % [distance_points, pickup_points, risk_points, coins_collected, hazards_dodged, max_pace, mission_tier]
 	best_label.text = "Best Run: %d" % best_score
 	credits_label.text = "Credits: +%d (Total %d)" % [credits_earned, total_credits]
-	relics_label.text = "Relics (%s): %s" % [rarity_text, relics_text]
+	relics_label.text = "Relics (%s): %s\nSynergies: %s" % [rarity_text, relics_text, synergies_text]
 	if is_new_best:
 		best_label.text += " | New personal best"
 

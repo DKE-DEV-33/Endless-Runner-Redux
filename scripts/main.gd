@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.49"
+const BUILD_VERSION: String = "build-1.2.50"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -212,11 +212,20 @@ var relic_draft_pending_pity: bool = false
 var relic_draft_active: bool = false
 var relic_draft_safe_timer: float = 0.0
 var relic_drafts_without_rare: int = 0
+var run_active_synergies: Array[String] = []
 var relic_flash_until: float = 0.0
 var run_coin_bonus_mult: float = 0.0
 var run_chrono_bonus_sec: float = 0.0
 var run_fireguard_bonus_sec: float = 0.0
 var run_magnet_bonus_radius: float = 0.0
+var run_synergy_coin_bonus_mult: float = 0.0
+var run_synergy_chrono_bonus_sec: float = 0.0
+var run_synergy_fireguard_bonus_sec: float = 0.0
+var run_synergy_magnet_bonus_radius: float = 0.0
+var run_synergy_health_cap_bonus: int = 0
+var run_synergy_health_spawn_bonus: float = 0.0
+var run_synergy_score_bonus_mult: float = 0.0
+var run_synergy_absorb_bonus_score: int = 0
 var rift_event_type: int = 0
 var rift_event_name: String = ""
 var rift_event_target: int = 0
@@ -1406,6 +1415,8 @@ func _on_hazard_body_entered(body: Node, hazard: Area2D) -> void:
 	hazard_hit_cooldown = HAZARD_HIT_COOLDOWN
 	if shield_hits > 0:
 		shield_hits -= 1
+		if run_synergy_absorb_bonus_score > 0:
+			risk_score += run_synergy_absorb_bonus_score
 		_play_sfx_tone(520.0, 0.12, -6.0)
 		_set_info_notice("Aegis absorbed impact", 2.0)
 		return
@@ -1447,12 +1458,12 @@ func _on_ability_pickup_body_entered(body: Node, pickup: Area2D) -> void:
 		_set_info_notice("Aegis acquired: next hit blocked", 2.8)
 		_play_sfx_tone(420.0, 0.16, -8.0)
 	elif kind == AbilityType.CHRONO:
-		chrono_until = run_seconds + CHRONO_DURATION + run_chrono_bonus_sec
+		chrono_until = run_seconds + CHRONO_DURATION + run_chrono_bonus_sec + run_synergy_chrono_bonus_sec
 		Engine.time_scale = 0.84
 		_set_info_notice("Chrono surge: time dilated", 2.8)
 		_play_sfx_tone(300.0, 0.18, -8.0)
 	elif kind == AbilityType.FIREGUARD:
-		fireguard_until = run_seconds + FIREGUARD_DURATION + (float(perk_fireguard_level) * FIREGUARD_BONUS_SECONDS_PER_LEVEL) + run_fireguard_bonus_sec
+		fireguard_until = run_seconds + FIREGUARD_DURATION + (float(perk_fireguard_level) * FIREGUARD_BONUS_SECONDS_PER_LEVEL) + run_fireguard_bonus_sec + run_synergy_fireguard_bonus_sec
 		_set_info_notice("Fireguard online: chasers pass through harmlessly", 2.8)
 		_play_sfx_tone(640.0, 0.14, -8.0)
 	else:
@@ -1625,7 +1636,7 @@ func _update_active_abilities() -> void:
 func _update_magnet_pull(delta: float) -> void:
 	if magnet_until <= run_seconds:
 		return
-	var magnet_radius: float = MAGNET_RADIUS + run_magnet_bonus_radius
+	var magnet_radius: float = MAGNET_RADIUS + run_magnet_bonus_radius + run_synergy_magnet_bonus_radius
 	var pull_target: Vector2 = player.global_position + Vector2(0.0, -18.0)
 	for coin: Area2D in coins:
 		if not is_instance_valid(coin):
@@ -1855,11 +1866,11 @@ func _mission_text() -> String:
 	return "Directive: --"
 
 func _apply_health_delta(delta: int) -> void:
-	health = clampi(health + delta, 0, max_health_cap)
+	health = clampi(health + delta, 0, max_health_cap + run_synergy_health_cap_bonus)
 	_refresh_health_label()
 
 func _coin_points(multiplier: int = 1) -> int:
-	var bonus_mult: float = 1.0 + (float(perk_coin_value_level) * COIN_VALUE_BONUS_PER_LEVEL) + run_coin_bonus_mult
+	var bonus_mult: float = 1.0 + (float(perk_coin_value_level) * COIN_VALUE_BONUS_PER_LEVEL) + run_coin_bonus_mult + run_synergy_coin_bonus_mult
 	var points: float = float(25 * multiplier) * bonus_mult
 	return maxi(1, int(round(points)))
 
@@ -1877,7 +1888,7 @@ func _increment_pace_level(amount: int, reason: String) -> void:
 	_set_info_notice("%s | Pace level: %d" % [reason, pace_level], 2.1)
 
 func _compute_health_spawn_chance() -> float:
-	var health_missing: int = max_health_cap - health
+	var health_missing: int = (max_health_cap + run_synergy_health_cap_bonus) - health
 	var pace_level: int = player.get_pace_level()
 	var difficulty_penalty: float = minf(0.36, float(mission_tier - 1) * 0.020 + float(current_section) * 0.014)
 	var pressure_bonus: float = float(health_missing) * 0.135
@@ -1886,7 +1897,7 @@ func _compute_health_spawn_chance() -> float:
 	var coins_to_next_heart: int = maxi(0, next_bonus_heart_at - total_coins_collected)
 	var economy_pressure_bonus: float = 0.05 if (health <= 2 and coins_to_next_heart > 65) else 0.0
 	var rift_penalty: float = 0.06 if rift_active else 0.0
-	var chance: float = 0.09 + pressure_bonus + critical_bonus + pace_bonus + economy_pressure_bonus - difficulty_penalty - rift_penalty
+	var chance: float = 0.09 + pressure_bonus + critical_bonus + pace_bonus + economy_pressure_bonus + run_synergy_health_spawn_bonus - difficulty_penalty - rift_penalty
 
 	# "Pity" protection: at critical health on repeated dangerous routes, force a spawn.
 	if health <= 1 and danger_routes_since_health >= 2:
@@ -1898,7 +1909,7 @@ func _compute_health_spawn_chance() -> float:
 
 func _base_info_text() -> String:
 	var text: String = "Mode: %s | Biome: %s | Encounter: %s | Esc: pause/settings/rules | Big coin x10" % [run_mode.capitalize(), _current_biome().get("name", "Sky-Forge"), _encounter_name()]
-	text += " | Relics: %d" % run_relics.size()
+	text += " | Relics: %d | Syn: %d" % [run_relics.size(), run_active_synergies.size()]
 	if rift_active and rift_event_type != RiftEventType.NONE:
 		text += " | Event: %s %d/%d" % [rift_event_name, rift_event_progress, rift_event_target]
 	return text
@@ -1934,7 +1945,8 @@ func _set_info_notice(message: String, duration: float = INFO_NOTICE_DURATION) -
 	_refresh_info_label()
 
 func _current_score() -> int:
-	return _distance_points() + pickup_score + risk_score
+	var base_score: int = _distance_points() + pickup_score + risk_score
+	return int(round(float(base_score) * (1.0 + run_synergy_score_bonus_mult)))
 
 func _distance_points() -> int:
 	return int(float(distance_score) * _speed_multiplier())
@@ -1978,6 +1990,7 @@ func _finish_end_run() -> void:
 	get_tree().set_meta("total_credits", total_credits)
 	get_tree().set_meta("last_relics", _run_relics_text())
 	get_tree().set_meta("last_relic_rarity", _run_relic_rarity_text())
+	get_tree().set_meta("last_synergies", _run_synergies_text())
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/RunSummary.tscn")
 
@@ -2015,12 +2028,22 @@ func _init_run_relics() -> void:
 	relic_draft_active = false
 	relic_draft_safe_timer = 0.0
 	relic_drafts_without_rare = 0
+	run_active_synergies.clear()
 	run_coin_bonus_mult = 0.0
 	run_chrono_bonus_sec = 0.0
 	run_fireguard_bonus_sec = 0.0
 	run_magnet_bonus_radius = 0.0
+	run_synergy_coin_bonus_mult = 0.0
+	run_synergy_chrono_bonus_sec = 0.0
+	run_synergy_fireguard_bonus_sec = 0.0
+	run_synergy_magnet_bonus_radius = 0.0
+	run_synergy_health_cap_bonus = 0
+	run_synergy_health_spawn_bonus = 0.0
+	run_synergy_score_bonus_mult = 0.0
+	run_synergy_absorb_bonus_score = 0
 	relic_flash_until = 0.0
 	relic_flash.visible = false
+	_recompute_synergies()
 
 func _grant_relic_for_section(section_index: int) -> void:
 	if section_index <= 0 or (section_index % RELIC_SECTION_INTERVAL) != 0:
@@ -2170,6 +2193,42 @@ func _apply_relic_effect(relic_id: String) -> void:
 			run_magnet_bonus_radius += 50.0
 		"vitality_cell":
 			_apply_health_delta(1)
+	_recompute_synergies()
+
+func _recompute_synergies() -> void:
+	run_active_synergies.clear()
+	run_synergy_coin_bonus_mult = 0.0
+	run_synergy_chrono_bonus_sec = 0.0
+	run_synergy_fireguard_bonus_sec = 0.0
+	run_synergy_magnet_bonus_radius = 0.0
+	run_synergy_health_cap_bonus = 0
+	run_synergy_health_spawn_bonus = 0.0
+	run_synergy_score_bonus_mult = 0.0
+	run_synergy_absorb_bonus_score = 0
+
+	if run_relics.has("coin_lens") and run_relics.has("magnet_array"):
+		run_active_synergies.append("Relic Harvester")
+		run_synergy_coin_bonus_mult += 0.12
+		run_synergy_magnet_bonus_radius += 60.0
+	if run_relics.has("chrono_spool") and run_relics.has("firecore"):
+		run_active_synergies.append("Temporal Furnace")
+		run_synergy_chrono_bonus_sec += 0.8
+		run_synergy_fireguard_bonus_sec += 0.8
+	if run_relics.has("aegis_shard") and run_relics.has("vitality_cell"):
+		run_active_synergies.append("Bulwark Circuit")
+		run_synergy_health_cap_bonus += 1
+		run_synergy_health_spawn_bonus += 0.08
+	if run_relics.has("coin_lens") and run_relics.has("chrono_spool"):
+		run_active_synergies.append("Time Arbitrage")
+		run_synergy_score_bonus_mult += 0.06
+	if run_relics.has("magnet_array") and run_relics.has("vitality_cell"):
+		run_active_synergies.append("Recovery Lattice")
+		run_synergy_health_spawn_bonus += 0.12
+	if run_relics.has("aegis_shard") and run_relics.has("firecore"):
+		run_active_synergies.append("Aegis Forge")
+		run_synergy_absorb_bonus_score += 45
+
+	health = mini(health, max_health_cap + run_synergy_health_cap_bonus)
 
 func _relic_display_name(relic_id: String) -> String:
 	if RELIC_LIBRARY.has(relic_id):
@@ -2239,6 +2298,11 @@ func _run_relics_text() -> String:
 	for relic_id: String in run_relics:
 		names.append(_relic_display_name(relic_id))
 	return ", ".join(names)
+
+func _run_synergies_text() -> String:
+	if run_active_synergies.is_empty():
+		return "None"
+	return ", ".join(run_active_synergies)
 
 func _run_relic_rarity_text() -> String:
 	if run_relics.is_empty():
