@@ -203,3 +203,7 @@ text = "Create + Start"
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Back"
+
+[node name="ConfirmDialog" type="ConfirmationDialog" parent="."]
+title = "Confirm"
+dialog_text = "Are you sure?"

@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.52"
+const BUILD_VERSION: String = "build-1.2.53"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -1991,6 +1991,7 @@ func _finish_end_run() -> void:
 	get_tree().set_meta("last_relics", _run_relics_text())
 	get_tree().set_meta("last_relic_rarity", _run_relic_rarity_text())
 	get_tree().set_meta("last_synergies", _run_synergies_text())
+	_touch_profile_last_played()
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/RunSummary.tscn")
 
@@ -2360,6 +2361,12 @@ func _run_stats_file() -> String:
 	var profile_id: String = String(get_tree().get_meta("profile_id", "slot1"))
 	return RUN_STATS_FILE_TEMPLATE % profile_id
 
+func _touch_profile_last_played() -> void:
+	var config: ConfigFile = ConfigFile.new()
+	config.load(_run_stats_file())
+	config.set_value("profile", "last_played", Time.get_datetime_string_from_system(false, true))
+	config.save(_run_stats_file())
+
 func _setup_pause_ui() -> void:
 	pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	pause_panel.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -2467,7 +2474,8 @@ func _apply_window_size(size_index: int) -> void:
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DisplayServer.window_set_size(target)
 	get_window().size = target
-	var centered: Vector2i = screen_rect.position + ((screen_rect.size - target) / 2)
+	var delta: Vector2i = screen_rect.size - target
+	var centered: Vector2i = screen_rect.position + Vector2i(int(round(float(delta.x) / 2.0)), int(round(float(delta.y) / 2.0)))
 	DisplayServer.window_set_position(centered)
 
 func _save_display_settings() -> void:
