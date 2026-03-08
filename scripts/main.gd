@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.53"
+const BUILD_VERSION: String = "build-1.2.54"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -43,6 +43,7 @@ const RELIC_LIBRARY: Dictionary = {
 	"firecore": {"name": "Firecore Prism", "effect": "+1.5s fireguard duration this run.", "rarity": "rare", "weight": 0.30},
 }
 const RELIC_IDS: Array[String] = ["aegis_shard", "vitality_cell", "coin_lens", "magnet_array", "chrono_spool", "firecore"]
+const STARTING_UNLOCKED_RELICS: Array[String] = ["aegis_shard", "vitality_cell", "coin_lens"]
 const COINS_PER_BONUS_HEART: int = 100
 const SECTION_LENGTH: float = 2300.0
 const ALT_ROUTE_VERTICAL_GAP_MIN: float = 104.0
@@ -206,6 +207,7 @@ var perk_vitality_level: int = 0
 var perk_coin_value_level: int = 0
 var perk_fireguard_level: int = 0
 var run_relics: Array[String] = []
+var unlocked_relics: Array[String] = []
 var relic_draft_options: Array[String] = []
 var relic_draft_pending_options: Array[String] = []
 var relic_draft_pending_pity: bool = false
@@ -2015,10 +2017,18 @@ func _load_progression_perks() -> void:
 		perk_vitality_level = 0
 		perk_coin_value_level = 0
 		perk_fireguard_level = 0
+		unlocked_relics = STARTING_UNLOCKED_RELICS.duplicate()
+		config.set_value("progression", "relic_unlocks", unlocked_relics)
+		config.save(_run_stats_file())
 	else:
 		perk_vitality_level = clampi(int(config.get_value("progression", "perk_vitality", 0)), 0, PERK_MAX_LEVEL)
 		perk_coin_value_level = clampi(int(config.get_value("progression", "perk_coin_value", 0)), 0, PERK_MAX_LEVEL)
 		perk_fireguard_level = clampi(int(config.get_value("progression", "perk_fireguard", 0)), 0, PERK_MAX_LEVEL)
+		unlocked_relics = _sanitize_relic_unlocks(config.get_value("progression", "relic_unlocks", STARTING_UNLOCKED_RELICS))
+		if unlocked_relics.is_empty():
+			unlocked_relics = STARTING_UNLOCKED_RELICS.duplicate()
+			config.set_value("progression", "relic_unlocks", unlocked_relics)
+			config.save(_run_stats_file())
 	max_health_cap = MAX_HEALTH + (perk_vitality_level * VITALITY_HEALTH_PER_LEVEL)
 
 func _init_run_relics() -> void:
@@ -2052,7 +2062,7 @@ func _grant_relic_for_section(section_index: int) -> void:
 	if not relic_draft_pending_options.is_empty() or relic_draft_active:
 		return
 	var available: Array[String] = []
-	for relic_id: String in RELIC_IDS:
+	for relic_id: String in unlocked_relics:
 		if not run_relics.has(relic_id):
 			available.append(relic_id)
 	if available.is_empty():
@@ -2270,6 +2280,15 @@ func _pick_weighted_relic(pool: Array[String]) -> String:
 		if roll <= running:
 			return relic_id
 	return pool[pool.size() - 1]
+
+func _sanitize_relic_unlocks(value: Variant) -> Array[String]:
+	var unlocked: Array[String] = []
+	if value is Array:
+		for entry: Variant in value:
+			var relic_id: String = String(entry)
+			if RELIC_IDS.has(relic_id) and not unlocked.has(relic_id):
+				unlocked.append(relic_id)
+	return unlocked
 
 func _apply_relic_choice_button_style(button: Button, relic_id: String) -> void:
 	match _relic_rarity(relic_id):

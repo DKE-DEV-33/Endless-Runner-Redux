@@ -3,6 +3,7 @@ extends Control
 const INTRO_MUSIC_PATH: String = "res://assets/audio/intro_music.mp3"
 const RUN_STATS_FILE_TEMPLATE: String = "user://run_stats_%s.cfg"
 const PROFILE_IDS: Array[String] = ["slot1", "slot2", "slot3"]
+const STARTING_UNLOCKED_RELICS: Array[String] = ["aegis_shard", "vitality_cell", "coin_lens"]
 
 @onready var main_menu_box: VBoxContainer = $Card/Center/MainMenuBox
 @onready var load_panel: VBoxContainer = $Card/Center/LoadPanel
@@ -198,6 +199,7 @@ func _create_or_overwrite_slot(slot_id: String, player_name: String) -> void:
 	config.set_value("progression", "perk_vitality", 0)
 	config.set_value("progression", "perk_coin_value", 0)
 	config.set_value("progression", "perk_fireguard", 0)
+	config.set_value("progression", "relic_unlocks", STARTING_UNLOCKED_RELICS.duplicate())
 	config.save(_run_stats_file(slot_id))
 
 func _delete_slot(slot_id: String) -> void:
