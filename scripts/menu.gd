@@ -5,9 +5,9 @@ const RUN_STATS_FILE: String = "user://run_stats.cfg"
 const WINDOW_SIZES: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
 const PERK_MAX_LEVEL: int = 3
 const PERK_COSTS: Dictionary = {
-	"vitality": [120, 220, 360],
-	"coin_value": [140, 250, 390],
-	"fireguard": [130, 240, 380],
+	"vitality": [400, 820, 1450],
+	"coin_value": [460, 900, 1550],
+	"fireguard": [430, 860, 1500],
 }
 
 @onready var start_button: Button = $Card/Center/StartButton
