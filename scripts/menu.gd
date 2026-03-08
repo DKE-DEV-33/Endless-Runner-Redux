@@ -13,6 +13,7 @@ const PERK_COSTS: Dictionary = {
 @onready var start_button: Button = $Card/Center/StartButton
 @onready var rules_button: Button = $Card/Center/RulesButton
 @onready var quit_button: Button = $Card/Center/QuitButton
+@onready var exit_button: Button = $Card/Center/ExitButton
 @onready var last_score_label: Label = $Card/Center/LastScoreLabel
 @onready var best_score_label: Label = $Card/Center/BestScoreLabel
 @onready var summary_label: Label = $Card/Center/SummaryLabel
@@ -40,6 +41,7 @@ func _ready() -> void:
 	start_button.pressed.connect(_on_start_pressed)
 	rules_button.pressed.connect(_on_rules_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
+	exit_button.pressed.connect(_on_exit_pressed)
 	close_rules_button.pressed.connect(_hide_rules_overlay)
 	mode_button.pressed.connect(_on_mode_pressed)
 	ui_scale_button.pressed.connect(_on_ui_scale_pressed)
@@ -64,6 +66,11 @@ func _on_start_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/Main.tscn")
 
 func _on_quit_pressed() -> void:
+	if intro_player.playing:
+		intro_player.stop()
+	get_tree().change_scene_to_file("res://scenes/Splash.tscn")
+
+func _on_exit_pressed() -> void:
 	get_tree().quit()
 
 func _on_rules_pressed() -> void:
