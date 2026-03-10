@@ -28,6 +28,7 @@ const RELIC_IDS: Array[String] = ["aegis_shard", "vitality_cell", "coin_lens", "
 @onready var last_score_label: Label = $Card/Center/LastScoreLabel
 @onready var best_score_label: Label = $Card/Center/BestScoreLabel
 @onready var summary_label: Label = $Card/Center/SummaryLabel
+@onready var relic_history_label: Label = $Card/Center/RelicHistoryLabel
 @onready var title_label: Label = $Card/Center/Title
 @onready var mode_button: Button = $Card/Center/ModeButton
 @onready var ui_scale_button: Button = $Card/Center/UiScaleButton
@@ -139,14 +140,20 @@ func _refresh_score_labels() -> void:
 	var last_coins: int = int(get_tree().get_meta("last_coins_collected", 0))
 	var last_credits_earned: int = int(get_tree().get_meta("last_credits_earned", 0))
 	var is_new_best: bool = bool(get_tree().get_meta("is_new_best", false)) or bool(get_tree().get_meta("new_best", false))
+	var last_unlock: String = String(get_tree().get_meta("last_meta_unlock", ""))
 
 	if has_last:
 		var suffix: String = " NEW BEST!" if is_new_best else ""
 		last_score_label.text = "Last Run: %d%s\nD: %d   P: %d   R: %d" % [last_score, suffix, last_distance, last_pickup, last_risk]
 		summary_label.text = "Coins: %d   Dodges: %d\nPace: %d   Tier: %d   +%d Credits" % [last_coins, last_dodges, last_max_pace, last_tier, last_credits_earned]
+		if last_unlock == "":
+			relic_history_label.text = "Last Unlock: --"
+		else:
+			relic_history_label.text = "Last Unlock: %s" % last_unlock
 	else:
 		last_score_label.text = "Last Run: --"
 		summary_label.text = "Run Summary: --"
+		relic_history_label.text = "Last Unlock: --"
 
 	best_score_label.text = "Best Run: %d" % best_score
 
