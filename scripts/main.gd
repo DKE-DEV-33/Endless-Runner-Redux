@@ -35,8 +35,8 @@ const BIOME_THEME_COLORS: Array[Color] = [
 	Color(0.15, 0.04, 0.08), # Ember Vault
 ]
 const BIOME_TRANSITION_SHADE_ALPHA: float = 0.52
-const BIOME_TRANSITION_PANEL_HOLD: float = 1.55
-const BIOME_TRANSITION_FADE: float = 0.34
+const BIOME_TRANSITION_PANEL_HOLD: float = 2.75
+const BIOME_TRANSITION_FADE: float = 0.50
 const RELIC_LIBRARY: Dictionary = {
 	"aegis_shard": {"name": "Aegis Shard", "effect": "Gain a shield charge now.", "rarity": "common", "weight": 1.00},
 	"vitality_cell": {"name": "Vitality Cell", "effect": "Restore 1 health immediately.", "rarity": "common", "weight": 1.00},
