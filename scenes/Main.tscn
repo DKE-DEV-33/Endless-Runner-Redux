@@ -178,6 +178,61 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(1, 0.8, 0.38, 0.0)
 
+[node name="BiomeTransitionShade" type="ColorRect" parent="CanvasLayer"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.01, 0.02, 0.05, 0.0)
+
+[node name="BiomeTransitionPanel" type="Panel" parent="CanvasLayer"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -320.0
+offset_top = -110.0
+offset_right = 320.0
+offset_bottom = 110.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("4")
+
+[node name="VBox" type="VBoxContainer" parent="CanvasLayer/BiomeTransitionPanel"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 22.0
+offset_right = -24.0
+offset_bottom = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="AccentBar" type="ColorRect" parent="CanvasLayer/BiomeTransitionPanel/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 8)
+color = Color(0.31, 0.75, 1, 0.95)
+
+[node name="TitleLabel" type="Label" parent="CanvasLayer/BiomeTransitionPanel/VBox"]
+layout_mode = 2
+text = "FOUNDRY RIM"
+horizontal_alignment = 1
+label_settings = SubResource("2")
+
+[node name="SubtitleLabel" type="Label" parent="CanvasLayer/BiomeTransitionPanel/VBox"]
+layout_mode = 2
+text = "Ember-fed scaffolds and iron silhouettes"
+horizontal_alignment = 1
+autowrap_mode = 2
+label_settings = SubResource("3")
+
 [node name="PauseLayer" type="CanvasLayer" parent="."]
 
 [node name="PauseBackdrop" type="ColorRect" parent="PauseLayer"]

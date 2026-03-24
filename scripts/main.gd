@@ -1,5 +1,5 @@
 extends Node2D
-const BUILD_VERSION: String = "build-1.2.54"
+const BUILD_VERSION: String = "build-1.2.55"
 
 const PLATFORM_THICKNESS: float = 24.0
 const PLAYER_AHEAD_SPAWN: float = 1650.0
@@ -30,10 +30,13 @@ const RELIC_DRAFT_SAFE_BEHIND: float = 180.0
 const RELIC_DRAFT_SAFE_Y_DELTA: float = 170.0
 const RELIC_DRAFT_STABLE_SECONDS: float = 0.28
 const BIOME_THEME_COLORS: Array[Color] = [
-	Color(0.04, 0.07, 0.12), # Foundry Rim (cool steel blue)
-	Color(0.05, 0.16, 0.20), # Rift Span (teal-cyan)
-	Color(0.17, 0.07, 0.08), # Ember Vault (red-ember)
+	Color(0.10, 0.05, 0.03), # Foundry Rim
+	Color(0.03, 0.10, 0.14), # Rift Span
+	Color(0.15, 0.04, 0.08), # Ember Vault
 ]
+const BIOME_TRANSITION_SHADE_ALPHA: float = 0.52
+const BIOME_TRANSITION_PANEL_HOLD: float = 1.55
+const BIOME_TRANSITION_FADE: float = 0.34
 const RELIC_LIBRARY: Dictionary = {
 	"aegis_shard": {"name": "Aegis Shard", "effect": "Gain a shield charge now.", "rarity": "common", "weight": 1.00},
 	"vitality_cell": {"name": "Vitality Cell", "effect": "Restore 1 health immediately.", "rarity": "common", "weight": 1.00},
@@ -126,9 +129,30 @@ const SECTION_COLORS: Array[Color] = [
 	Color(0.09, 0.06, 0.13), # Rift violet
 ]
 const BIOMES: Array[Dictionary] = [
-	{"name": "Foundry Rim", "hazard_mult": 0.95, "coin_bonus": 1},
-	{"name": "Rift Span", "hazard_mult": 1.18, "coin_bonus": 0},
-	{"name": "Ember Vault", "hazard_mult": 1.06, "coin_bonus": 2},
+	{
+		"name": "Foundry Rim",
+		"tagline": "Ember-fed scaffolds and iron silhouettes",
+		"hazard_mult": 0.95,
+		"coin_bonus": 1,
+		"accent": Color(1.0, 0.47, 0.23),
+		"accent_soft": Color(0.67, 0.23, 0.14),
+	},
+	{
+		"name": "Rift Span",
+		"tagline": "Signal fog, scanlight, and fractured rails",
+		"hazard_mult": 1.18,
+		"coin_bonus": 0,
+		"accent": Color(0.22, 0.82, 1.0),
+		"accent_soft": Color(0.08, 0.36, 0.52),
+	},
+	{
+		"name": "Ember Vault",
+		"tagline": "Cathedral heat and crimson pressure",
+		"hazard_mult": 1.06,
+		"coin_bonus": 2,
+		"accent": Color(1.0, 0.28, 0.50),
+		"accent_soft": Color(0.48, 0.12, 0.24),
+	},
 ]
 const GAMEPLAY_MUSIC_PATH: String = "res://assets/audio/gameplay_music.mp3"
 
@@ -145,6 +169,14 @@ const GAMEPLAY_MUSIC_PATH: String = "res://assets/audio/gameplay_music.mp3"
 @onready var legend_label: Label = $CanvasLayer/LegendLabel
 @onready var version_label: Label = $CanvasLayer/VersionLabel
 @onready var relic_flash: ColorRect = $CanvasLayer/RelicFlash
+@onready var hud_top_card: ColorRect = $CanvasLayer/HUDTopCard
+@onready var hud_bottom_card: ColorRect = $CanvasLayer/HUDBottomCard
+@onready var legend_card: ColorRect = $CanvasLayer/LegendCard
+@onready var biome_transition_shade: ColorRect = $CanvasLayer/BiomeTransitionShade
+@onready var biome_transition_panel: Panel = $CanvasLayer/BiomeTransitionPanel
+@onready var biome_transition_accent_bar: ColorRect = $CanvasLayer/BiomeTransitionPanel/VBox/AccentBar
+@onready var biome_transition_title_label: Label = $CanvasLayer/BiomeTransitionPanel/VBox/TitleLabel
+@onready var biome_transition_subtitle_label: Label = $CanvasLayer/BiomeTransitionPanel/VBox/SubtitleLabel
 @onready var pause_layer: CanvasLayer = $PauseLayer
 @onready var pause_backdrop: ColorRect = $PauseLayer/PauseBackdrop
 @onready var pause_panel: Panel = $PauseLayer/PausePanel
@@ -268,6 +300,11 @@ var atmosphere_spires: Array[Dictionary] = []
 var atmosphere_smog: Array[Dictionary] = []
 var segments_since_drop_through: int = 0
 var lane_guides: Array[Dictionary] = []
+var pause_panel_style_base: StyleBoxFlat
+var pause_button_style_normal_base: StyleBoxFlat
+var pause_button_style_hover_base: StyleBoxFlat
+var pause_button_style_pressed_base: StyleBoxFlat
+var biome_transition_tween: Tween
 
 func _ready() -> void:
 	_setup_run_mode_and_seed()
@@ -289,8 +326,10 @@ func _ready() -> void:
 	_init_encounter_director()
 	_prewarm_post_bootstrap_route()
 	next_rift_at = rng.randf_range(RIFT_MIN_SECONDS, RIFT_MAX_SECONDS)
+	_cache_ui_theme_bases()
 	_apply_biome_for_section(0, false)
 	_apply_section_theme(0)
+	_apply_biome_ui_theme(false)
 	score_label.text = "Score: 0"
 	_refresh_health_label()
 	status_label.text = "Status: SKY-FORGE DOCK"
@@ -1760,6 +1799,7 @@ func _apply_biome_for_section(section_index: int, announce: bool = true) -> void
 	current_biome_index = next_idx
 	_update_biome_music()
 	if changed and announce:
+		_show_biome_transition_card()
 		_set_info_notice("Entering %s" % _current_biome().get("name", "Sky-Forge"), 3.0)
 
 func _current_biome() -> Dictionary:
@@ -1809,6 +1849,121 @@ func _apply_section_theme(section_index: int) -> void:
 	_tint_atmosphere_decor(theme_color)
 	_tint_parallax_layers(theme_color)
 	_tint_lane_guides(theme_color)
+	_apply_biome_ui_theme()
+
+func _biome_accent_color() -> Color:
+	return Color(_current_biome().get("accent", Color(0.31, 0.75, 1.0)))
+
+func _biome_soft_color() -> Color:
+	return Color(_current_biome().get("accent_soft", Color(0.10, 0.24, 0.38)))
+
+func _cache_ui_theme_bases() -> void:
+	if pause_panel_style_base == null:
+		pause_panel_style_base = (pause_panel.get_theme_stylebox("panel").duplicate() as StyleBoxFlat)
+	if pause_button_style_normal_base == null:
+		pause_button_style_normal_base = (resume_button.get_theme_stylebox("normal").duplicate() as StyleBoxFlat)
+	if pause_button_style_hover_base == null:
+		pause_button_style_hover_base = (resume_button.get_theme_stylebox("hover").duplicate() as StyleBoxFlat)
+	if pause_button_style_pressed_base == null:
+		pause_button_style_pressed_base = (resume_button.get_theme_stylebox("pressed").duplicate() as StyleBoxFlat)
+
+func _apply_biome_ui_theme(animate_transition_card: bool = true) -> void:
+	var accent: Color = _biome_accent_color()
+	var accent_soft: Color = _biome_soft_color()
+	hud_top_card.color = Color(
+		clampf(0.05 + accent_soft.r * 0.22, 0.0, 1.0),
+		clampf(0.07 + accent_soft.g * 0.26, 0.0, 1.0),
+		clampf(0.10 + accent_soft.b * 0.30, 0.0, 1.0),
+		0.86
+	)
+	hud_bottom_card.color = hud_top_card.color
+	legend_card.color = hud_top_card.color.darkened(0.04)
+	score_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
+	health_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
+	status_label.modulate = accent.lightened(0.28)
+	mission_label.modulate = accent.lightened(0.18)
+	info_label.modulate = Color(0.92, 0.96, 1.0, 1.0)
+	legend_label.modulate = Color(0.92, 0.96, 1.0, 1.0)
+	version_label.modulate = accent.lightened(0.10)
+	relic_flash.color = accent.lightened(0.18)
+
+	if pause_panel_style_base != null:
+		var pause_style: StyleBoxFlat = pause_panel_style_base.duplicate()
+		pause_style.bg_color = Color(
+			clampf(0.05 + accent_soft.r * 0.22, 0.0, 1.0),
+			clampf(0.07 + accent_soft.g * 0.24, 0.0, 1.0),
+			clampf(0.11 + accent_soft.b * 0.26, 0.0, 1.0),
+			0.96
+		)
+		pause_style.border_color = accent.lightened(0.18)
+		pause_panel.add_theme_stylebox_override("panel", pause_style)
+
+	_apply_pause_button_style(pause_window_size_button, accent, accent_soft)
+	_apply_pause_button_style(pause_rules_button, accent, accent_soft)
+	_apply_pause_button_style(resume_button, accent, accent_soft)
+	_apply_pause_button_style(restart_button, accent, accent_soft)
+	_apply_pause_button_style(menu_button, accent, accent_soft)
+	_apply_pause_button_style(pause_rules_close_button, accent, accent_soft)
+	_apply_transition_card_style(accent, accent_soft)
+	if not animate_transition_card:
+		biome_transition_panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
+		biome_transition_shade.color.a = 0.0
+
+func _apply_pause_button_style(button: Button, accent: Color, accent_soft: Color) -> void:
+	if pause_button_style_normal_base == null or pause_button_style_hover_base == null or pause_button_style_pressed_base == null:
+		return
+	var normal_style: StyleBoxFlat = pause_button_style_normal_base.duplicate()
+	normal_style.bg_color = accent
+	button.add_theme_stylebox_override("normal", normal_style)
+
+	var hover_style: StyleBoxFlat = pause_button_style_hover_base.duplicate()
+	hover_style.bg_color = accent.lightened(0.12)
+	button.add_theme_stylebox_override("hover", hover_style)
+
+	var pressed_style: StyleBoxFlat = pause_button_style_pressed_base.duplicate()
+	pressed_style.bg_color = accent_soft.lightened(0.14)
+	button.add_theme_stylebox_override("pressed", pressed_style)
+
+func _apply_transition_card_style(accent: Color, accent_soft: Color) -> void:
+	biome_transition_accent_bar.color = accent
+	var style: StyleBoxFlat = pause_panel_style_base.duplicate() if pause_panel_style_base != null else StyleBoxFlat.new()
+	style.bg_color = Color(
+		clampf(0.04 + accent_soft.r * 0.24, 0.0, 1.0),
+		clampf(0.05 + accent_soft.g * 0.26, 0.0, 1.0),
+		clampf(0.08 + accent_soft.b * 0.30, 0.0, 1.0),
+		0.97
+	)
+	style.border_color = accent.lightened(0.22)
+	biome_transition_panel.add_theme_stylebox_override("panel", style)
+
+func _show_biome_transition_card() -> void:
+	var biome_name: String = String(_current_biome().get("name", "Sky-Forge"))
+	var tagline: String = String(_current_biome().get("tagline", ""))
+	var accent: Color = _biome_accent_color()
+	biome_transition_title_label.text = biome_name.to_upper()
+	biome_transition_subtitle_label.text = tagline
+	biome_transition_accent_bar.color = accent
+	biome_transition_shade.color = Color(accent.r * 0.16, accent.g * 0.16, accent.b * 0.18, 0.0)
+	biome_transition_shade.visible = true
+	biome_transition_panel.visible = true
+	biome_transition_panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	biome_transition_panel.scale = Vector2(0.96, 0.96)
+	if biome_transition_tween != null and biome_transition_tween.is_valid():
+		biome_transition_tween.kill()
+	biome_transition_tween = create_tween()
+	biome_transition_tween.set_parallel(true)
+	biome_transition_tween.tween_property(biome_transition_shade, "color:a", BIOME_TRANSITION_SHADE_ALPHA, BIOME_TRANSITION_FADE)
+	biome_transition_tween.tween_property(biome_transition_panel, "modulate:a", 1.0, BIOME_TRANSITION_FADE)
+	biome_transition_tween.tween_property(biome_transition_panel, "scale", Vector2.ONE, BIOME_TRANSITION_FADE)
+	biome_transition_tween.set_parallel(false)
+	biome_transition_tween.tween_interval(BIOME_TRANSITION_PANEL_HOLD)
+	biome_transition_tween.set_parallel(true)
+	biome_transition_tween.tween_property(biome_transition_shade, "color:a", 0.0, BIOME_TRANSITION_FADE)
+	biome_transition_tween.tween_property(biome_transition_panel, "modulate:a", 0.0, BIOME_TRANSITION_FADE)
+	biome_transition_tween.finished.connect(func() -> void:
+		biome_transition_shade.visible = false
+		biome_transition_panel.visible = false
+	)
 
 func _init_mission() -> void:
 	mission_completed = false
