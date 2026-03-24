@@ -305,6 +305,7 @@ var pause_button_style_normal_base: StyleBoxFlat
 var pause_button_style_hover_base: StyleBoxFlat
 var pause_button_style_pressed_base: StyleBoxFlat
 var biome_transition_tween: Tween
+var biome_transition_active: bool = false
 
 func _ready() -> void:
 	_setup_run_mode_and_seed()
@@ -341,6 +342,8 @@ func _ready() -> void:
 	_setup_pause_ui()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if biome_transition_active:
+		return
 	if relic_draft_active:
 		return
 	if event.is_action_pressed("ui_cancel"):
@@ -1940,6 +1943,7 @@ func _show_biome_transition_card() -> void:
 	var biome_name: String = String(_current_biome().get("name", "Sky-Forge"))
 	var tagline: String = String(_current_biome().get("tagline", ""))
 	var accent: Color = _biome_accent_color()
+	biome_transition_active = true
 	biome_transition_title_label.text = biome_name.to_upper()
 	biome_transition_subtitle_label.text = tagline
 	biome_transition_accent_bar.color = accent
@@ -1950,7 +1954,10 @@ func _show_biome_transition_card() -> void:
 	biome_transition_panel.scale = Vector2(0.96, 0.96)
 	if biome_transition_tween != null and biome_transition_tween.is_valid():
 		biome_transition_tween.kill()
+	player.velocity = Vector2.ZERO
+	get_tree().paused = true
 	biome_transition_tween = create_tween()
+	biome_transition_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	biome_transition_tween.set_parallel(true)
 	biome_transition_tween.tween_property(biome_transition_shade, "color:a", BIOME_TRANSITION_SHADE_ALPHA, BIOME_TRANSITION_FADE)
 	biome_transition_tween.tween_property(biome_transition_panel, "modulate:a", 1.0, BIOME_TRANSITION_FADE)
@@ -1961,8 +1968,10 @@ func _show_biome_transition_card() -> void:
 	biome_transition_tween.tween_property(biome_transition_shade, "color:a", 0.0, BIOME_TRANSITION_FADE)
 	biome_transition_tween.tween_property(biome_transition_panel, "modulate:a", 0.0, BIOME_TRANSITION_FADE)
 	biome_transition_tween.finished.connect(func() -> void:
+		biome_transition_active = false
 		biome_transition_shade.visible = false
 		biome_transition_panel.visible = false
+		get_tree().paused = false
 	)
 
 func _init_mission() -> void:
@@ -2568,6 +2577,8 @@ func _setup_pause_ui() -> void:
 	_refresh_window_size_button()
 
 func _toggle_pause_menu() -> void:
+	if biome_transition_active:
+		return
 	if relic_draft_active:
 		return
 	var opening: bool = not pause_panel.visible
