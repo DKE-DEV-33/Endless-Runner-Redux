@@ -35,7 +35,6 @@ const BIOME_THEME_COLORS: Array[Color] = [
 	Color(0.15, 0.04, 0.08), # Ember Vault
 ]
 const BIOME_TRANSITION_SHADE_ALPHA: float = 0.52
-const BIOME_TRANSITION_PANEL_HOLD: float = 2.75
 const BIOME_TRANSITION_FADE: float = 0.50
 const RELIC_LIBRARY: Dictionary = {
 	"aegis_shard": {"name": "Aegis Shard", "effect": "Gain a shield charge now.", "rarity": "common", "weight": 1.00},
@@ -306,6 +305,7 @@ var pause_button_style_hover_base: StyleBoxFlat
 var pause_button_style_pressed_base: StyleBoxFlat
 var biome_transition_tween: Tween
 var biome_transition_active: bool = false
+var biome_transition_dismissing: bool = false
 
 func _ready() -> void:
 	_setup_run_mode_and_seed()
@@ -343,6 +343,23 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if biome_transition_active:
+		if biome_transition_dismissing:
+			return
+		if event is InputEventKey:
+			var transition_key: InputEventKey = event
+			if transition_key.pressed and not transition_key.echo:
+				_dismiss_biome_transition_card()
+				return
+		elif event is InputEventMouseButton:
+			var transition_mouse: InputEventMouseButton = event
+			if transition_mouse.pressed:
+				_dismiss_biome_transition_card()
+				return
+		elif event is InputEventJoypadButton:
+			var transition_pad: InputEventJoypadButton = event
+			if transition_pad.pressed:
+				_dismiss_biome_transition_card()
+				return
 		return
 	if relic_draft_active:
 		return
@@ -1944,8 +1961,9 @@ func _show_biome_transition_card() -> void:
 	var tagline: String = String(_current_biome().get("tagline", ""))
 	var accent: Color = _biome_accent_color()
 	biome_transition_active = true
+	biome_transition_dismissing = false
 	biome_transition_title_label.text = biome_name.to_upper()
-	biome_transition_subtitle_label.text = tagline
+	biome_transition_subtitle_label.text = "%s\n\nPress any key or click to continue" % tagline
 	biome_transition_accent_bar.color = accent
 	biome_transition_shade.color = Color(accent.r * 0.16, accent.g * 0.16, accent.b * 0.18, 0.0)
 	biome_transition_shade.visible = true
@@ -1962,13 +1980,22 @@ func _show_biome_transition_card() -> void:
 	biome_transition_tween.tween_property(biome_transition_shade, "color:a", BIOME_TRANSITION_SHADE_ALPHA, BIOME_TRANSITION_FADE)
 	biome_transition_tween.tween_property(biome_transition_panel, "modulate:a", 1.0, BIOME_TRANSITION_FADE)
 	biome_transition_tween.tween_property(biome_transition_panel, "scale", Vector2.ONE, BIOME_TRANSITION_FADE)
-	biome_transition_tween.set_parallel(false)
-	biome_transition_tween.tween_interval(BIOME_TRANSITION_PANEL_HOLD)
+
+func _dismiss_biome_transition_card() -> void:
+	if not biome_transition_active or biome_transition_dismissing:
+		return
+	biome_transition_dismissing = true
+	if biome_transition_tween != null and biome_transition_tween.is_valid():
+		biome_transition_tween.kill()
+	biome_transition_tween = create_tween()
+	biome_transition_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	biome_transition_tween.set_parallel(true)
 	biome_transition_tween.tween_property(biome_transition_shade, "color:a", 0.0, BIOME_TRANSITION_FADE)
 	biome_transition_tween.tween_property(biome_transition_panel, "modulate:a", 0.0, BIOME_TRANSITION_FADE)
+	biome_transition_tween.tween_property(biome_transition_panel, "scale", Vector2(1.02, 1.02), BIOME_TRANSITION_FADE)
 	biome_transition_tween.finished.connect(func() -> void:
 		biome_transition_active = false
+		biome_transition_dismissing = false
 		biome_transition_shade.visible = false
 		biome_transition_panel.visible = false
 		get_tree().paused = false
