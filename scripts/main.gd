@@ -37,7 +37,7 @@ const BIOME_THEME_COLORS: Array[Color] = [
 const BIOME_TRANSITION_SHADE_ALPHA: float = 0.52
 const BIOME_TRANSITION_FADE: float = 0.50
 const BIOME_TRANSITION_PULSE_ALPHA: float = 0.16
-const BIOME_TRANSITION_MIN_DISMISS_MS: int = 350
+const BIOME_TRANSITION_MIN_DISMISS_MS: int = 450
 const BIOME_EMBLEM_PATHS: Array[String] = [
 	"res://assets/ui_icons/fireguard.svg", # Foundry Rim
 	"res://assets/ui_icons/chrono_hourglass.svg", # Rift Span
@@ -318,9 +318,6 @@ var biome_transition_dismissing: bool = false
 var biome_transition_started_ms: int = 0
 
 func _ready() -> void:
-	# We pause the SceneTree for overlays (relic draft, biome transition). Keep this controller
-	# responsive to input during pause, but explicitly stop gameplay simulation in _process().
-	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_run_mode_and_seed()
 	_load_audio_settings()
 	_load_display_settings()
