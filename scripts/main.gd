@@ -1833,8 +1833,8 @@ func _apply_biome_for_section(section_index: int, announce: bool = true) -> void
 	current_biome_index = next_idx
 	_update_biome_music()
 	if changed and announce:
-		_show_biome_transition_card()
-		_set_info_notice("Entering %s" % _current_biome().get("name", "Sky-Forge"), 3.0)
+		_play_biome_shift_stagecraft()
+		_set_info_notice("Biome shift: %s" % _current_biome().get("name", "Sky-Forge"), 2.2)
 
 func _current_biome() -> Dictionary:
 	if BIOMES.is_empty():
@@ -1969,6 +1969,33 @@ func _apply_transition_card_style(accent: Color, accent_soft: Color) -> void:
 	)
 	style.border_color = accent.lightened(0.22)
 	biome_transition_panel.add_theme_stylebox_override("panel", style)
+
+func _play_biome_shift_stagecraft() -> void:
+	# Biomes are currently light-touch gameplay-wise, so we treat transitions as a quick
+	# stagecraft beat instead of a full stop modal.
+	var accent: Color = _biome_accent_color()
+	_set_biome_emblem()
+	biome_transition_panel.visible = false
+	biome_transition_shade.visible = true
+	biome_transition_pulse.visible = true
+	biome_transition_shade.color = Color(accent.r * 0.10, accent.g * 0.10, accent.b * 0.12, 0.0)
+	biome_transition_pulse.color = Color(accent.r, accent.g, accent.b, 0.0)
+
+	if biome_transition_tween != null and biome_transition_tween.is_valid():
+		biome_transition_tween.kill()
+	biome_transition_tween = create_tween()
+	biome_transition_tween.set_parallel(true)
+	biome_transition_tween.tween_property(biome_transition_shade, "color:a", BIOME_TRANSITION_SHADE_ALPHA * 0.55, 0.22)
+	biome_transition_tween.tween_property(biome_transition_shade, "color:a", 0.0, 0.34).set_delay(0.22)
+	biome_transition_tween.tween_property(biome_transition_pulse, "color:a", BIOME_TRANSITION_PULSE_ALPHA * 0.95, 0.16)
+	biome_transition_tween.tween_property(biome_transition_pulse, "color:a", 0.0, 0.26).set_delay(0.16)
+	biome_transition_tween.finished.connect(func() -> void:
+		if is_instance_valid(biome_transition_shade):
+			biome_transition_shade.visible = false
+		if is_instance_valid(biome_transition_pulse):
+			biome_transition_pulse.visible = false
+	)
+	_play_biome_transition_stinger()
 
 func _show_biome_transition_card() -> void:
 	var biome_name: String = String(_current_biome().get("name", "Sky-Forge"))

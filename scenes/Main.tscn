@@ -1,8 +1,7 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/player.gd" id="2"]
-[ext_resource type="Script" path="res://scripts/biome_transition_input.gd" id="11"]
 [ext_resource type="FontFile" path="res://assets/fonts/Orbitron-SemiBold.ttf" id="3"]
 [ext_resource type="FontFile" path="res://assets/fonts/Orbitron-Regular.ttf" id="4"]
 [ext_resource type="Texture2D" path="res://assets/ui_icons/speed_minus.svg" id="5"]
@@ -75,9 +74,6 @@ color = Color(0.03, 0.05, 0.09, 1)
 [node name="ParallaxDecor" type="Node2D" parent="."]
 
 [node name="LaneGuides" type="Node2D" parent="."]
-
-[node name="BiomeTransitionInput" type="Node" parent="."]
-script = ExtResource("11")
 
 [node name="Player" type="CharacterBody2D" parent="."]
 position = Vector2(140, 420)

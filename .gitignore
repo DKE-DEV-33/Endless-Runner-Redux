@@ -4,6 +4,7 @@
 # Godot import/export artifacts
 .import/
 *.import
+*.uid
 export_presets.cfg
 
 # OS/editor noise
