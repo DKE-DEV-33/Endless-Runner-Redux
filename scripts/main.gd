@@ -36,6 +36,13 @@ const BIOME_THEME_COLORS: Array[Color] = [
 ]
 const BIOME_TRANSITION_SHADE_ALPHA: float = 0.52
 const BIOME_TRANSITION_FADE: float = 0.50
+const BIOME_TRANSITION_PULSE_ALPHA: float = 0.16
+const BIOME_TRANSITION_MIN_DISMISS_MS: int = 350
+const BIOME_EMBLEM_PATHS: Array[String] = [
+	"res://assets/ui_icons/fireguard.svg", # Foundry Rim
+	"res://assets/ui_icons/chrono_hourglass.svg", # Rift Span
+	"res://assets/ui_icons/shield.svg", # Ember Vault
+]
 const RELIC_LIBRARY: Dictionary = {
 	"aegis_shard": {"name": "Aegis Shard", "effect": "Gain a shield charge now.", "rarity": "common", "weight": 1.00},
 	"vitality_cell": {"name": "Vitality Cell", "effect": "Restore 1 health immediately.", "rarity": "common", "weight": 1.00},
@@ -172,8 +179,10 @@ const GAMEPLAY_MUSIC_PATH: String = "res://assets/audio/gameplay_music.mp3"
 @onready var hud_bottom_card: ColorRect = $CanvasLayer/HUDBottomCard
 @onready var legend_card: ColorRect = $CanvasLayer/LegendCard
 @onready var biome_transition_shade: ColorRect = $CanvasLayer/BiomeTransitionShade
+@onready var biome_transition_pulse: ColorRect = $CanvasLayer/BiomeTransitionPulse
 @onready var biome_transition_panel: Panel = $CanvasLayer/BiomeTransitionPanel
 @onready var biome_transition_accent_bar: ColorRect = $CanvasLayer/BiomeTransitionPanel/VBox/AccentBar
+@onready var biome_transition_emblem_icon: TextureRect = $CanvasLayer/BiomeTransitionPanel/VBox/EmblemIcon
 @onready var biome_transition_title_label: Label = $CanvasLayer/BiomeTransitionPanel/VBox/TitleLabel
 @onready var biome_transition_subtitle_label: Label = $CanvasLayer/BiomeTransitionPanel/VBox/SubtitleLabel
 @onready var pause_layer: CanvasLayer = $PauseLayer
@@ -306,8 +315,12 @@ var pause_button_style_pressed_base: StyleBoxFlat
 var biome_transition_tween: Tween
 var biome_transition_active: bool = false
 var biome_transition_dismissing: bool = false
+var biome_transition_started_ms: int = 0
 
 func _ready() -> void:
+	# We pause the SceneTree for overlays (relic draft, biome transition). Keep this controller
+	# responsive to input during pause, but explicitly stop gameplay simulation in _process().
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_run_mode_and_seed()
 	_load_audio_settings()
 	_load_display_settings()
@@ -345,6 +358,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if biome_transition_active:
 		if biome_transition_dismissing:
 			return
+		if (Time.get_ticks_msec() - biome_transition_started_ms) < BIOME_TRANSITION_MIN_DISMISS_MS:
+			return
 		if event is InputEventKey:
 			var transition_key: InputEventKey = event
 			if transition_key.pressed and not transition_key.echo:
@@ -376,6 +391,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if not is_instance_valid(player):
+		return
+	if get_tree().paused:
 		return
 
 	run_seconds += delta
@@ -1962,11 +1979,16 @@ func _show_biome_transition_card() -> void:
 	var accent: Color = _biome_accent_color()
 	biome_transition_active = true
 	biome_transition_dismissing = false
+	biome_transition_started_ms = Time.get_ticks_msec()
 	biome_transition_title_label.text = biome_name.to_upper()
 	biome_transition_subtitle_label.text = "%s\n\nPress any key or click to continue" % tagline
 	biome_transition_accent_bar.color = accent
+	biome_transition_accent_bar.scale = Vector2(0.0, 1.0)
+	_set_biome_emblem()
 	biome_transition_shade.color = Color(accent.r * 0.16, accent.g * 0.16, accent.b * 0.18, 0.0)
 	biome_transition_shade.visible = true
+	biome_transition_pulse.color = Color(accent.r, accent.g, accent.b, 0.0)
+	biome_transition_pulse.visible = true
 	biome_transition_panel.visible = true
 	biome_transition_panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
 	biome_transition_panel.scale = Vector2(0.96, 0.96)
@@ -1978,8 +2000,12 @@ func _show_biome_transition_card() -> void:
 	biome_transition_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	biome_transition_tween.set_parallel(true)
 	biome_transition_tween.tween_property(biome_transition_shade, "color:a", BIOME_TRANSITION_SHADE_ALPHA, BIOME_TRANSITION_FADE)
+	biome_transition_tween.tween_property(biome_transition_pulse, "color:a", BIOME_TRANSITION_PULSE_ALPHA, BIOME_TRANSITION_FADE * 0.55)
+	biome_transition_tween.tween_property(biome_transition_pulse, "color:a", 0.0, BIOME_TRANSITION_FADE * 0.75).set_delay(BIOME_TRANSITION_FADE * 0.25)
 	biome_transition_tween.tween_property(biome_transition_panel, "modulate:a", 1.0, BIOME_TRANSITION_FADE)
 	biome_transition_tween.tween_property(biome_transition_panel, "scale", Vector2.ONE, BIOME_TRANSITION_FADE)
+	biome_transition_tween.tween_property(biome_transition_accent_bar, "scale", Vector2.ONE, BIOME_TRANSITION_FADE * 0.9)
+	_play_biome_transition_stinger()
 
 func _dismiss_biome_transition_card() -> void:
 	if not biome_transition_active or biome_transition_dismissing:
@@ -1991,15 +2017,43 @@ func _dismiss_biome_transition_card() -> void:
 	biome_transition_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	biome_transition_tween.set_parallel(true)
 	biome_transition_tween.tween_property(biome_transition_shade, "color:a", 0.0, BIOME_TRANSITION_FADE)
+	biome_transition_tween.tween_property(biome_transition_pulse, "color:a", 0.0, BIOME_TRANSITION_FADE)
 	biome_transition_tween.tween_property(biome_transition_panel, "modulate:a", 0.0, BIOME_TRANSITION_FADE)
 	biome_transition_tween.tween_property(biome_transition_panel, "scale", Vector2(1.02, 1.02), BIOME_TRANSITION_FADE)
 	biome_transition_tween.finished.connect(func() -> void:
 		biome_transition_active = false
 		biome_transition_dismissing = false
 		biome_transition_shade.visible = false
+		biome_transition_pulse.visible = false
 		biome_transition_panel.visible = false
 		get_tree().paused = false
 	)
+
+func _set_biome_emblem() -> void:
+	if BIOME_EMBLEM_PATHS.is_empty():
+		return
+	var idx: int = current_biome_index % BIOME_EMBLEM_PATHS.size()
+	var path: String = String(BIOME_EMBLEM_PATHS[idx])
+	if path == "" or not ResourceLoader.exists(path):
+		return
+	var tex: Texture2D = load(path)
+	if tex != null:
+		biome_transition_emblem_icon.texture = tex
+
+func _play_biome_transition_stinger() -> void:
+	match current_biome_index:
+		0:
+			_play_sfx_tone(220.0, 0.10, -10.0)
+			_play_sfx_tone(330.0, 0.12, -12.0)
+			_play_sfx_tone(440.0, 0.14, -14.0)
+		1:
+			_play_sfx_tone(330.0, 0.10, -10.0)
+			_play_sfx_tone(495.0, 0.12, -12.0)
+			_play_sfx_tone(660.0, 0.14, -14.0)
+		_:
+			_play_sfx_tone(262.0, 0.10, -10.0)
+			_play_sfx_tone(392.0, 0.12, -12.0)
+			_play_sfx_tone(523.0, 0.14, -14.0)
 
 func _init_mission() -> void:
 	mission_completed = false
