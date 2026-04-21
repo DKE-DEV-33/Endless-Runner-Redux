@@ -125,8 +125,6 @@ const COIN_ARCH_CHANCE: float = 0.44
 const COIN_ARCH_MIN_WIDTH: float = 260.0
 const POWERUP_DEFAULT_FRACTION: float = 2.0
 const BIG_COIN_APEX_FRACTION: float = 3.2
-const BIOME_ARCH_BONUS: Array[float] = [0.0, 0.04, 0.20]
-const BIOME_CHASER_BONUS: Array[float] = [-0.04, 0.18, 0.02]
 const SECTION_COLORS: Array[Color] = [
 	Color(0.03, 0.05, 0.08), # Forge dusk
 	Color(0.05, 0.09, 0.15), # Reactor blue
@@ -140,6 +138,14 @@ const BIOMES: Array[Dictionary] = [
 		"tagline": "Ember-fed scaffolds and iron silhouettes",
 		"hazard_mult": 0.95,
 		"coin_bonus": 1,
+		"arch_bonus": 0.02,
+		"chaser_bonus": -0.05,
+		"branch_mult": 0.95,
+		"speed_pickup_mult": 1.05,
+		"health_bias": 0.00,
+		"hazard_w_single": 0.90,
+		"hazard_w_pair": 1.20,
+		"hazard_w_gate": 1.00,
 		"accent": Color(1.0, 0.47, 0.23),
 		"accent_soft": Color(0.67, 0.23, 0.14),
 	},
@@ -148,6 +154,14 @@ const BIOMES: Array[Dictionary] = [
 		"tagline": "Signal fog, scanlight, and fractured rails",
 		"hazard_mult": 1.18,
 		"coin_bonus": 0,
+		"arch_bonus": 0.06,
+		"chaser_bonus": 0.22,
+		"branch_mult": 1.18,
+		"speed_pickup_mult": 0.90,
+		"health_bias": 0.05,
+		"hazard_w_single": 0.70,
+		"hazard_w_pair": 1.00,
+		"hazard_w_gate": 1.45,
 		"accent": Color(0.22, 0.82, 1.0),
 		"accent_soft": Color(0.08, 0.36, 0.52),
 	},
@@ -156,6 +170,14 @@ const BIOMES: Array[Dictionary] = [
 		"tagline": "Cathedral heat and crimson pressure",
 		"hazard_mult": 1.06,
 		"coin_bonus": 2,
+		"arch_bonus": 0.18,
+		"chaser_bonus": 0.02,
+		"branch_mult": 1.08,
+		"speed_pickup_mult": 1.00,
+		"health_bias": -0.02,
+		"hazard_w_single": 1.10,
+		"hazard_w_pair": 0.95,
+		"hazard_w_gate": 0.90,
 		"accent": Color(1.0, 0.28, 0.50),
 		"accent_soft": Color(0.48, 0.12, 0.24),
 	},
@@ -418,11 +440,9 @@ func _process(delta: float) -> void:
 	if _bootstrap_active():
 		status_label.text = "Status: SKY-FORGE DOCK"
 	else:
-		var biome_name: String = _current_biome().get("name", "Foundry Rim")
-		if rift_active:
-			status_label.text = "Status: RIFT STORM (%s) | Pace %d" % [biome_name, player.get_pace_level()]
-		else:
-			status_label.text = "Status: FORGE RUN (%s) | Pace %d" % [biome_name, player.get_pace_level()]
+		var biome_name: String = String(_current_biome().get("name", "Foundry Rim")).to_upper()
+		var context: String = "RIFT STORM" if rift_active else "FORGE RUN"
+		status_label.text = "Biome: %s | %s | Pace %d" % [biome_name, context, player.get_pace_level()]
 		while next_spawn_x < player.global_position.x + PLAYER_AHEAD_SPAWN:
 			_spawn_segment()
 
@@ -503,6 +523,9 @@ func _spawn_segment() -> void:
 			allow_chaser = false
 			reward_mode = true
 			branch_mult = 1.20
+
+	# Biome-level lane complexity: some zones diverge more often.
+	branch_mult *= float(_current_biome().get("branch_mult", 1.0))
 
 	var platform_type: int = _pick_platform_type_for_lane(lane)
 	if platform_type == PlatformType.DROP_THROUGH:
@@ -877,7 +900,7 @@ func _place_coins(x: float, y: float, width: float, lane: int, reward_mult: floa
 	var base_coin_fraction: float = 1.0
 	var coin_y: float = _fractional_y(y, base_coin_fraction)
 	var arch_chance: float = COIN_ARCH_CHANCE
-	arch_chance += BIOME_ARCH_BONUS[current_biome_index]
+	arch_chance += float(_current_biome().get("arch_bonus", 0.0))
 	if reward_mult > 1.0:
 		arch_chance = minf(0.9, arch_chance + ((reward_mult - 1.0) * 0.35))
 	var use_arch: bool = lane > 0 and width >= COIN_ARCH_MIN_WIDTH and (force_arch or (rng.randf() < arch_chance))
@@ -929,23 +952,26 @@ func _place_hazards(x: float, y: float, width: float, lane: int, encounter_mult:
 	if rng.randf() > segment_hazard_chance:
 		return false
 
-	var pattern_roll: float = rng.randf()
+	# Biome-specific hazard mix (readable “rules” per zone).
+	var w_single: float = float(_current_biome().get("hazard_w_single", 1.0))
+	var w_pair: float = float(_current_biome().get("hazard_w_pair", 1.0))
+	var w_gate: float = float(_current_biome().get("hazard_w_gate", 1.0))
 	if rift_active:
-		pattern_roll += 0.18
-	pattern_roll += (hazard_mult - 1.0) * 0.12
-	if current_biome_index == 0:
-		# Foundry Rim leans into static clusters.
-		pattern_roll += 0.10
-
-	if pattern_roll < 0.34:
+		# Rift storms skew toward busier patterns.
+		w_gate += 0.25
+		w_pair += 0.15
+	var total_w: float = maxf(0.01, w_single + w_pair + w_gate)
+	var roll: float = rng.randf() * total_w
+	if roll < w_single:
 		_spawn_hazard_single(x, y, width)
-	elif pattern_roll < 0.72:
+	elif roll < (w_single + w_pair):
 		_spawn_hazard_pair(x, y, width)
 	else:
 		_spawn_hazard_gate(x, y, width)
 
 	var early_bonus: float = 0.10 if current_section <= 1 else 0.0
-	var chaser_chance: float = HAZARD_CHASER_CHANCE + BIOME_CHASER_BONUS[current_biome_index] + early_bonus + minf(0.18, float(pace_level) * 0.022)
+	var chaser_bonus: float = float(_current_biome().get("chaser_bonus", 0.0))
+	var chaser_chance: float = HAZARD_CHASER_CHANCE + chaser_bonus + early_bonus + minf(0.18, float(pace_level) * 0.022)
 	if allow_chaser and ((force_chaser and width > 220.0) or (width > 300.0 and rng.randf() < chaser_chance)):
 		_spawn_hazard_chaser(x, y, width)
 		last_segment_spawned_chaser = true
@@ -1115,6 +1141,7 @@ func _maybe_place_speed_pickup(x: float, y: float, width: float, lane: int, over
 	if pace_level <= 2:
 		spawn_chance *= 0.45
 	spawn_chance = clampf(spawn_chance, 0.008, SPEED_PICKUP_MAX_CHANCE)
+	spawn_chance *= float(_current_biome().get("speed_pickup_mult", 1.0))
 	if override_chance >= 0.0:
 		spawn_chance = override_chance
 	if rng.randf() > spawn_chance:
@@ -2168,7 +2195,8 @@ func _compute_health_spawn_chance() -> float:
 	var coins_to_next_heart: int = maxi(0, next_bonus_heart_at - total_coins_collected)
 	var economy_pressure_bonus: float = 0.05 if (health <= 2 and coins_to_next_heart > 65) else 0.0
 	var rift_penalty: float = 0.06 if rift_active else 0.0
-	var chance: float = 0.09 + pressure_bonus + critical_bonus + pace_bonus + economy_pressure_bonus + run_synergy_health_spawn_bonus - difficulty_penalty - rift_penalty
+	var biome_bias: float = float(_current_biome().get("health_bias", 0.0))
+	var chance: float = 0.09 + pressure_bonus + critical_bonus + pace_bonus + economy_pressure_bonus + run_synergy_health_spawn_bonus + biome_bias - difficulty_penalty - rift_penalty
 
 	# "Pity" protection: at critical health on repeated dangerous routes, force a spawn.
 	if health <= 1 and danger_routes_since_health >= 2:
